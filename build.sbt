@@ -665,7 +665,7 @@ lazy val unidocs = project
   .in(file("unidocs"))
   .enablePlugins(TypelevelUnidocPlugin)
   .settings(
-    name := "otel4s-docs",
+    name := "otel4s-sdk-docs",
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(
       `sdk-common`.jvm,
       `sdk-logs`.jvm,
