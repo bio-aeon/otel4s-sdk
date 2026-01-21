@@ -61,6 +61,9 @@ private final class SdkTracer[F[_]: Temporal: Diagnostic] private[trace] (
       .map(Span.fromBackend)
       .getOrElseF(Tracer.raiseNoCurrentSpan)
 
+  def withCurrentSpanOrNoop[A](f: Span[F] => F[A]): F[A] =
+    currentSpanOrNoop.flatMap(f)
+
   def spanBuilder(name: String): SpanBuilder[F] =
     SdkSpanBuilder[F](name, scopeInfo, sharedState, traceScope)
 
