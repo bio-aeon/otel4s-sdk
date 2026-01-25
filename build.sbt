@@ -1,6 +1,6 @@
 import com.typesafe.tools.mima.core._
 
-ThisBuild / tlBaseVersion := "0.16"
+ThisBuild / tlBaseVersion := "0.17"
 
 ThisBuild / organization := "org.typelevel"
 ThisBuild / organizationName := "Typelevel"
@@ -98,7 +98,7 @@ val ScalaPBCirceVersion = "0.16.0"
 val CaseInsensitiveVersion = "1.5.0"
 val ScalaJavaTimeVersion = "2.6.0"
 val ScribeVersion = "3.17.0"
-val Otel4sVersion = "0.15-ca28b04-SNAPSHOT"
+val Otel4sVersion = "0.16-83b6f7b-SNAPSHOT"
 
 lazy val scalaReflectDependency = Def.settings(
   libraryDependencies ++= {
