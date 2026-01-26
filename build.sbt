@@ -132,6 +132,7 @@ lazy val root = tlCrossRootProject
     `sdk-exporter-prometheus`,
     `sdk-exporter-trace`,
     `sdk-exporter`,
+    `sdk-contrib-metrics`,
     `sdk-contrib-aws-resource`,
     `sdk-contrib-aws-xray`,
     `sdk-contrib-aws-xray-propagator`,
@@ -531,6 +532,25 @@ lazy val `sdk-exporter` = crossProject(JVMPlatform, JSPlatform, NativePlatform)
 // SDK contrib modules
 //
 
+lazy val `sdk-contrib-metrics` =
+  crossProject(JVMPlatform, JSPlatform, NativePlatform)
+    .crossType(CrossType.Full)
+    .in(file("sdk-contrib/metrics"))
+    .dependsOn(`sdk-common`, `sdk-metrics`, `sdk-metrics-testkit` % Test)
+    .settings(
+      name := "otel4s-sdk-contrib-metrics",
+      startYear := Some(2026),
+      libraryDependencies ++= Seq(
+        "org.typelevel" %%% "otel4s-semconv-metrics" % Otel4sVersion,
+        "org.typelevel" %%% "otel4s-semconv-metrics-experimental" % Otel4sVersion % Test
+      )
+    )
+    .settings(artifactUploadSettings)
+    .settings(munitDependencies)
+    .jsSettings(scalaJSLinkerSettings)
+    .nativeEnablePlugins(ScalaNativeBrewedConfigPlugin)
+    .nativeSettings(scalaNativeSettings)
+
 lazy val `sdk-contrib-aws-resource` =
   crossProject(JVMPlatform, JSPlatform, NativePlatform)
     .crossType(CrossType.Pure)
@@ -623,6 +643,7 @@ lazy val docs = project
     sdk.jvm,
     `sdk-exporter`.jvm,
     `sdk-exporter-prometheus`.jvm,
+    `sdk-contrib-metrics`.jvm,
     `sdk-contrib-aws-resource`.jvm,
     `sdk-contrib-aws-xray`.jvm,
     `sdk-contrib-aws-xray-propagator`.jvm,
@@ -695,6 +716,7 @@ lazy val unidocs = project
       `sdk-exporter-prometheus`.jvm,
       `sdk-exporter-trace`.jvm,
       `sdk-exporter`.jvm,
+      `sdk-contrib-metrics`.jvm,
       `sdk-contrib-aws-resource`.jvm,
       `sdk-contrib-aws-xray`.jvm,
       `sdk-contrib-aws-xray-propagator`.jvm,
