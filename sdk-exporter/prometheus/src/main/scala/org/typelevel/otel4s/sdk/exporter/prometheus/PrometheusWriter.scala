@@ -33,6 +33,7 @@ import fs2.Stream
 import fs2.text.utf8
 import io.circe.Encoder
 import io.circe.syntax._
+import org.typelevel.otel4s.AnyValue
 import org.typelevel.otel4s.Attribute
 import org.typelevel.otel4s.AttributeType
 import org.typelevel.otel4s.Attributes
@@ -515,6 +516,11 @@ object PrometheusWriter {
       def seq[A: Encoder]: String =
         attribute.value.asInstanceOf[Seq[A]].toList.asJson.noSpaces
 
+      def anyValue: String = {
+        import org.typelevel.otel4s.sdk.exporter.otlp.AnyValueJsonEncoding
+        AnyValueJsonEncoding.encode(attribute.value.asInstanceOf[AnyValue])
+      }
+
       val value = attribute.key.`type` match {
         case AttributeType.Boolean    => primitive
         case AttributeType.Double     => primitive
@@ -524,6 +530,7 @@ object PrometheusWriter {
         case AttributeType.DoubleSeq  => seq[Double]
         case AttributeType.LongSeq    => seq[Long]
         case AttributeType.StringSeq  => seq[String]
+        case AttributeType.AnyValue   => anyValue
       }
 
       (key, escapeString(value))

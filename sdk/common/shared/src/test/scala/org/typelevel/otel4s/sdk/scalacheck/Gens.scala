@@ -61,6 +61,9 @@ trait Gens {
     implicit def seqArb[A: Arbitrary]: Arbitrary[Seq[A]] =
       Arbitrary(Gen.nonEmptyListOf(Arbitrary.arbitrary[A]))
 
+    implicit val anyValueArb: Arbitrary[AnyValue] =
+      Arbitraries.anyValueArbitrary
+
     def attribute[A: AttributeKey.KeySelect: Arbitrary]: Gen[Attribute[A]] =
       for {
         key <- nonEmptyString
@@ -77,6 +80,8 @@ trait Gens {
     val longSeq: Gen[Attribute[Seq[Long]]] = attribute[Seq[Long]]
     val doubleSeq: Gen[Attribute[Seq[Double]]] = attribute[Seq[Double]]
 
+    val anyValue: Gen[Attribute[AnyValue]] = attribute[AnyValue]
+
     Gen.oneOf(
       boolean,
       string,
@@ -85,7 +90,8 @@ trait Gens {
       stringSeq,
       booleanSeq,
       longSeq,
-      doubleSeq
+      doubleSeq,
+      anyValue
     )
   }
 
@@ -102,8 +108,11 @@ trait Gens {
   val anyValue: Gen[AnyValue] = {
     val string = Gen.alphaNumStr.map(AnyValue.string)
     val boolean = Arbitrary.arbitrary[Boolean].map(AnyValue.boolean)
-    val long = Gen.long.map(AnyValue.long)
-    val double = Gen.double.map(AnyValue.double)
+    // we deliberately use 'smaller' values to simplify e2e testing
+    val long = Gen.choose(Int.MinValue, Int.MaxValue).map(value => AnyValue.long(value.toLong))
+    val double = Gen.choose(-10000, 10000).retryUntil(_ % 100 != 0).map { value =>
+      AnyValue.double((BigDecimal(value) / 100).setScale(2).doubleValue)
+    }
     val byteArray = Gen.listOf(Gen.choose(Byte.MinValue, Byte.MaxValue)).map(_.toArray).map(AnyValue.bytes)
     val emptyValue = Gen.const(AnyValue.empty)
 

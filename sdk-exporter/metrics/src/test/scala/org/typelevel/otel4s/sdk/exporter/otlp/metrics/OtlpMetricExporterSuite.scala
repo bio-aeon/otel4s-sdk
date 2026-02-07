@@ -34,11 +34,13 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.Test
 import org.scalacheck.effect.PropF
+import org.typelevel.otel4s.AnyValue
 import org.typelevel.otel4s.Attribute
 import org.typelevel.otel4s.AttributeType
 import org.typelevel.otel4s.Attributes
 import org.typelevel.otel4s.sdk.common.InstrumentationScope
 import org.typelevel.otel4s.sdk.exporter.RetryPolicy
+import org.typelevel.otel4s.sdk.exporter.otlp.AnyValueJsonEncoding
 import org.typelevel.otel4s.sdk.metrics.data.AggregationTemporality
 import org.typelevel.otel4s.sdk.metrics.data.MetricData
 import org.typelevel.otel4s.sdk.metrics.data.MetricPoints
@@ -356,6 +358,9 @@ class OtlpMetricExporterSuite extends CatsEffectSuite with ScalaCheckEffectSuite
         .map(v => if (escape) "\"" + v + "\"" else v)
         .mkString("[", ",", "]")
 
+    def anyValue: String =
+      AnyValueJsonEncoding.encode(attribute.value.asInstanceOf[AnyValue])
+
     val value = attribute.key.`type` match {
       case AttributeType.Boolean    => primitive
       case AttributeType.Double     => primitive
@@ -365,6 +370,7 @@ class OtlpMetricExporterSuite extends CatsEffectSuite with ScalaCheckEffectSuite
       case AttributeType.DoubleSeq  => seq[Double](escape = false)
       case AttributeType.LongSeq    => seq[Long](escape = false)
       case AttributeType.StringSeq  => seq[String](escape = true)
+      case AttributeType.AnyValue   => anyValue
     }
 
     // result
@@ -374,14 +380,21 @@ class OtlpMetricExporterSuite extends CatsEffectSuite with ScalaCheckEffectSuite
   // it's hard to deal with big numeric values due to various encoding pitfalls
   // so we simplify the numbers
   private def adaptAttributes(attributes: Attributes): Attributes = {
-    val adapted = attributes.map { attribute =>
+    val adapted = attributes.flatMap { attribute =>
       val name = attribute.key.name
       attribute.key.`type` match {
-        case AttributeType.Double    => Attribute(name, 1.1)
-        case AttributeType.DoubleSeq => Attribute(name, Seq(1.1))
-        case AttributeType.Long      => Attribute(name, 1L)
-        case AttributeType.LongSeq   => Attribute(name, Seq(1L))
-        case _                       => attribute
+        case AttributeType.Double    => Seq(Attribute(name, 1.1))
+        case AttributeType.DoubleSeq => Seq(Attribute(name, Seq(1.1)))
+        case AttributeType.Long      => Seq(Attribute(name, 1L))
+        case AttributeType.LongSeq   => Seq(Attribute(name, Seq(1L)))
+        case AttributeType.AnyValue  =>
+          attribute.value.asInstanceOf[AnyValue] match {
+            case _: AnyValue.EmptyValue                              => Nil
+            case AnyValue.StringValueImpl(string) if string.isEmpty  => Nil
+            case AnyValue.ByteArrayValueImpl(bytes) if bytes.isEmpty => Nil
+            case _                                                   => Seq(attribute)
+          }
+        case _ => Seq(attribute)
       }
     }
 

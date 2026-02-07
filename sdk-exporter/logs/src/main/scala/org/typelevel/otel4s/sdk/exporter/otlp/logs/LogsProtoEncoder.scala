@@ -21,10 +21,6 @@ package logs
 
 import com.google.protobuf.ByteString
 import io.circe.Json
-import org.typelevel.otel4s.sdk.exporter.proto.common.{AnyValue => AnyValueProto}
-import org.typelevel.otel4s.sdk.exporter.proto.common.ArrayValue
-import org.typelevel.otel4s.sdk.exporter.proto.common.KeyValue
-import org.typelevel.otel4s.sdk.exporter.proto.common.KeyValueList
 import org.typelevel.otel4s.sdk.exporter.proto.logs.{LogRecord => LogProto}
 import org.typelevel.otel4s.sdk.exporter.proto.logs.ResourceLogs
 import org.typelevel.otel4s.sdk.exporter.proto.logs.ScopeLogs
@@ -77,41 +73,12 @@ private object LogsProtoEncoder {
         .map(v => ByteString.copyFrom(v.spanId.toArray))
         .getOrElse(ByteString.EMPTY)
 
-    def toAnyValueProto(value: AnyValue): AnyValueProto =
-      value match {
-        case string: AnyValue.StringValue =>
-          AnyValueProto(AnyValueProto.Value.StringValue(string.value))
-
-        case boolean: AnyValue.BooleanValue =>
-          AnyValueProto(AnyValueProto.Value.BoolValue(boolean.value))
-
-        case long: AnyValue.LongValue =>
-          AnyValueProto(AnyValueProto.Value.IntValue(long.value))
-
-        case double: AnyValue.DoubleValue =>
-          AnyValueProto(AnyValueProto.Value.DoubleValue(double.value))
-
-        case AnyValue.ByteArrayValueImpl(byteArray) =>
-          AnyValueProto(AnyValueProto.Value.BytesValue(ByteString.copyFrom(byteArray)))
-
-        case seq: AnyValue.SeqValue =>
-          AnyValueProto(AnyValueProto.Value.ArrayValue(ArrayValue(seq.value.map(toAnyValueProto))))
-
-        case map: AnyValue.MapValue =>
-          AnyValueProto(AnyValueProto.Value.KvlistValue(KeyValueList(map.value.map { case (k, v) =>
-            KeyValue(k, Some(toAnyValueProto(v)))
-          }.toSeq)))
-
-        case AnyValue.EmptyValueImpl =>
-          AnyValueProto(AnyValueProto.Value.Empty)
-      }
-
     LogProto(
       timeUnixNano = log.timestamp.map(_.toNanos).getOrElse(0L),
       observedTimeUnixNano = log.observedTimestamp.toNanos,
       severityNumber = SeverityNumber.fromValue(log.severity.map(_.value).getOrElse(0)),
       severityText = log.severityText.getOrElse(""),
-      body = log.body.map(toAnyValueProto),
+      body = log.body.map(anyValue => ProtoEncoder.encode(anyValue)),
       attributes = ProtoEncoder.encode(log.attributes.elements),
       droppedAttributesCount = log.attributes.dropped,
       flags = 0,

@@ -19,10 +19,8 @@ package org.typelevel.otel4s.sdk.exporter.otlp.logs
 import io.circe.Encoder
 import io.circe.Json
 import io.circe.syntax._
-import org.typelevel.otel4s.AnyValue
 import org.typelevel.otel4s.sdk.exporter.otlp.JsonCodecs
 import org.typelevel.otel4s.sdk.logs.data.LogRecordData
-import scodec.bits.ByteVector
 
 // the instances mimic Protobuf encoding
 private object LogsJsonCodecs extends JsonCodecs {
@@ -35,7 +33,7 @@ private object LogsJsonCodecs extends JsonCodecs {
           "observedTimeUnixNano" := log.observedTimestamp.toNanos.toString,
           "severityNumber" := log.severity.map(_.value).filter(_ > 0),
           "severityText" := log.severityText.filter(_.nonEmpty),
-          "body" := log.body.map(encodeValue),
+          "body" := log.body.map(_.asJson),
           "attributes" := log.attributes.elements,
           "droppedAttributesCount" := log.attributes.dropped,
           "traceId" := log.traceContext.map(_.traceId.toHex),
@@ -73,25 +71,4 @@ private object LogsJsonCodecs extends JsonCodecs {
       Json.obj("resourceLogs" := resourceLogs).dropEmptyValues
     }
 
-  private def encodeValue(value: AnyValue): Json = {
-    value match {
-      case _: AnyValue.EmptyValue             => Json.obj()
-      case string: AnyValue.StringValue       => Json.obj("stringValue" := string.value)
-      case boolean: AnyValue.BooleanValue     => Json.obj("boolValue" := boolean.value)
-      case long: AnyValue.LongValue           => Json.obj("intValue" := long.value.toString)
-      case double: AnyValue.DoubleValue       => Json.obj("doubleValue" := double.value)
-      case byteArray: AnyValue.ByteArrayValue => Json.obj("bytesValue" := ByteVector(byteArray.value).toBase64)
-      case seq: AnyValue.SeqValue             =>
-        Json.obj("arrayValue" := Json.obj("values" := seq.value.map(encodeValue)).dropEmptyValues)
-
-      case map: AnyValue.MapValue =>
-        Json.obj(
-          "kvlistValue" := Json
-            .obj("values" := map.value.map { case (k, v) =>
-              Json.obj("key" := k, "value" := encodeValue(v))
-            })
-            .dropEmptyValues
-        )
-    }
-  }
 }

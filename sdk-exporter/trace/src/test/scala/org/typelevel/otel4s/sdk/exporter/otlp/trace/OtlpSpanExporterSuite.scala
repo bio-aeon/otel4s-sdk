@@ -24,6 +24,7 @@ import com.comcast.ip4s._
 import fs2.io.compression._
 import io.circe.Encoder
 import io.circe.Json
+import io.circe.JsonNumber
 import munit._
 import org.http4s.Headers
 import org.http4s.Uri
@@ -34,6 +35,7 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.Test
 import org.scalacheck.effect.PropF
+import org.typelevel.otel4s.AnyValue
 import org.typelevel.otel4s.Attribute
 import org.typelevel.otel4s.AttributeType
 import org.typelevel.otel4s.Attributes
@@ -265,14 +267,20 @@ class OtlpSpanExporterSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
   // it's hard to deal with big numeric values due to various encoding pitfalls
   // so we simplify the numbers
   private def adaptAttributes(attributes: Attributes): Attributes = {
-    val adapted = attributes.map { attribute =>
+    val adapted = attributes.flatMap { attribute =>
       val name = attribute.key.name
       attribute.key.`type` match {
-        case AttributeType.Double    => Attribute(name, 1.1)
-        case AttributeType.DoubleSeq => Attribute(name, Seq(1.1))
-        case AttributeType.Long      => Attribute(name, 1L)
-        case AttributeType.LongSeq   => Attribute(name, Seq(1L))
-        case _                       => attribute
+        case AttributeType.Double    => Seq(Attribute(name, 1.1))
+        case AttributeType.DoubleSeq => Seq(Attribute(name, Seq(1.1)))
+        case AttributeType.Long      => Seq(Attribute(name, 1L))
+        case AttributeType.LongSeq   => Seq(Attribute(name, Seq(1L)))
+        case AttributeType.AnyValue  =>
+          attribute.value.asInstanceOf[AnyValue] match {
+            case _: AnyValue.EmptyValue                              => Nil
+            case AnyValue.ByteArrayValueImpl(bytes) if bytes.isEmpty => Nil
+            case _                                                   => Seq(attribute)
+          }
+        case _ => Seq(attribute)
       }
     }
 
@@ -290,6 +298,36 @@ class OtlpSpanExporterSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
       JaegerTag(a.key.name, "string", json.noSpaces.asJson)
     }
 
+    def anyValue: JaegerTag = {
+      val (tpe, value) = a.value.asInstanceOf[AnyValue] match {
+        case string: AnyValue.StringValue =>
+          ("string", Json.fromString(string.value))
+
+        case boolean: AnyValue.BooleanValue =>
+          ("bool", Json.fromBoolean(boolean.value))
+
+        case long: AnyValue.LongValue =>
+          ("int64", Json.fromLong(long.value))
+
+        case double: AnyValue.DoubleValue =>
+          ("float64", JsonNumber.fromDecimalStringUnsafe(double.value.toString).asJson)
+
+        case bytes: AnyValue.ByteArrayValue =>
+          ("string", AnyValueJsonEncoding.encode(bytes).asJson)
+
+        case seq: AnyValue.SeqValue =>
+          ("string", AnyValueJsonEncoding.encode(seq).asJson)
+
+        case map: AnyValue.MapValue =>
+          ("string", AnyValueJsonEncoding.encode(map).asJson)
+
+        case _: AnyValue.EmptyValue =>
+          ("string", Json.fromString(""))
+      }
+
+      JaegerTag(a.key.name, tpe, value)
+    }
+
     a.key.`type` match {
       case AttributeType.Boolean    => primitive[Boolean]("bool")
       case AttributeType.String     => primitive[String]("string")
@@ -299,6 +337,7 @@ class OtlpSpanExporterSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
       case AttributeType.StringSeq  => seq[String]
       case AttributeType.DoubleSeq  => seq[Double]
       case AttributeType.LongSeq    => seq[Long]
+      case AttributeType.AnyValue   => anyValue
     }
   }
 

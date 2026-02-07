@@ -18,12 +18,14 @@ package org.typelevel.otel4s
 package sdk
 package exporter.otlp
 
+import com.google.protobuf.ByteString
 import io.circe.Json
 import org.typelevel.otel4s.sdk.common.InstrumentationScope
+import org.typelevel.otel4s.sdk.exporter.proto.common.{AnyValue => AnyValueProto}
 import org.typelevel.otel4s.sdk.exporter.proto.common.{InstrumentationScope => ScopeProto}
-import org.typelevel.otel4s.sdk.exporter.proto.common.AnyValue
 import org.typelevel.otel4s.sdk.exporter.proto.common.ArrayValue
 import org.typelevel.otel4s.sdk.exporter.proto.common.KeyValue
+import org.typelevel.otel4s.sdk.exporter.proto.common.KeyValueList
 import org.typelevel.otel4s.sdk.exporter.proto.resource.{Resource => ResourceProto}
 import scalapb.GeneratedMessage
 import scalapb_circe.Printer
@@ -62,15 +64,51 @@ private[otlp] object ProtoEncoder {
         formattingEnumsAsNumber = true
       )
 
+  implicit val anyValueEncoder: ProtoEncoder[AnyValue, AnyValueProto] = {
+    new ProtoEncoder[AnyValue, AnyValueProto] { self =>
+      def encode(anyValue: AnyValue): AnyValueProto = {
+        val value = anyValue match {
+          case string: AnyValue.StringValue =>
+            AnyValueProto.Value.StringValue(string.value)
+
+          case boolean: AnyValue.BooleanValue =>
+            AnyValueProto.Value.BoolValue(boolean.value)
+
+          case long: AnyValue.LongValue =>
+            AnyValueProto.Value.IntValue(long.value)
+
+          case double: AnyValue.DoubleValue =>
+            AnyValueProto.Value.DoubleValue(double.value)
+
+          case AnyValue.ByteArrayValueImpl(byteArray) =>
+            AnyValueProto.Value.BytesValue(ByteString.copyFrom(byteArray))
+
+          case seq: AnyValue.SeqValue =>
+            AnyValueProto.Value.ArrayValue(ArrayValue(seq.value.map(self.encode)))
+
+          case map: AnyValue.MapValue =>
+            AnyValueProto.Value.KvlistValue(KeyValueList(map.value.map { case (k, v) =>
+              KeyValue(k, Some(self.encode(v)))
+            }.toSeq))
+
+          case AnyValue.EmptyValueImpl =>
+            AnyValueProto.Value.Empty
+        }
+
+        AnyValueProto(value)
+      }
+    }
+  }
+
   implicit val attributeEncoder: ProtoEncoder[Attribute[_], KeyValue] = { att =>
-    import AnyValue.Value
+    import AnyValueProto.Value
 
-    def primitive[A](lift: A => Value): Value =
-      lift(att.value.asInstanceOf[A])
+    def primitive[A](lift: A => Value): AnyValueProto =
+      AnyValueProto(lift(att.value.asInstanceOf[A]))
 
-    def seq[A](lift: A => Value): Value.ArrayValue = {
+    def seq[A](lift: A => Value): AnyValueProto = {
       val values = att.value.asInstanceOf[Seq[A]]
-      Value.ArrayValue(ArrayValue(values.map(value => AnyValue(lift(value)))))
+      AnyValueProto(Value.ArrayValue(ArrayValue(values.map(value => AnyValueProto(lift(value))))))
     }
 
     val value = att.key.`type` match {
@@ -82,9 +120,10 @@ private[otlp] object ProtoEncoder {
       case AttributeType.DoubleSeq  => seq[Double](Value.DoubleValue.apply)
       case AttributeType.StringSeq  => seq[String](Value.StringValue.apply)
       case AttributeType.LongSeq    => seq[Long](Value.IntValue.apply)
+      case AttributeType.AnyValue   => anyValueEncoder.encode(att.value.asInstanceOf[AnyValue])
     }
 
-    KeyValue(att.key.name, Some(AnyValue(value)))
+    KeyValue(att.key.name, Some(value))
   }
 
   implicit val attributesEncoder: ProtoEncoder[Attributes, Seq[KeyValue]] = { attr =>

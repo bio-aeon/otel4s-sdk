@@ -23,6 +23,7 @@ import munit.ScalaCheckSuite
 import org.scalacheck.Arbitrary
 import org.scalacheck.Prop
 import org.scalacheck.Test
+import org.typelevel.otel4s.AnyValue
 import org.typelevel.otel4s.Attribute
 import org.typelevel.otel4s.AttributeType
 import org.typelevel.otel4s.Attributes
@@ -71,6 +72,8 @@ class ProtoEncoderSuite extends ScalaCheckSuite {
             Json.obj("arrayValue" := seq[String]("stringValue"))
           case AttributeType.LongSeq =>
             Json.obj("arrayValue" := seq[Long]("intValue"))
+          case AttributeType.AnyValue =>
+            value.asInstanceOf[AnyValue].asJson
         }
 
         Json.obj("key" := attribute.key.name, "value" := v)
@@ -136,6 +139,39 @@ class ProtoEncoderSuite extends ScalaCheckSuite {
     assertEquals(
       ProtoEncoder.toJson(Attribute("double_list", Seq(1.1, -1.1))).noSpaces,
       """{"key":"double_list","value":{"arrayValue":{"values":[{"doubleValue":1.1},{"doubleValue":-1.1}]}}}"""
+    )
+
+    assertEquals(
+      ProtoEncoder.toJson(Attribute("bytes", AnyValue.bytes(Array[Byte](1, 2, 3)): AnyValue)).noSpaces,
+      """{"key":"bytes","value":{"bytesValue":"AQID"}}"""
+    )
+
+    assertEquals(
+      ProtoEncoder.toJson(Attribute("empty", AnyValue.empty: AnyValue)).noSpaces,
+      """{"key":"empty","value":{}}"""
+    )
+
+    assertEquals(
+      ProtoEncoder
+        .toJson(
+          Attribute("heterogeneousArray", AnyValue.seq(Seq(AnyValue.string("string"), AnyValue.long(123L))): AnyValue)
+        )
+        .noSpaces,
+      """{"key":"heterogeneousArray","value":{"arrayValue":{"values":[{"stringValue":"string"},{"intValue":"123"}]}}}"""
+    )
+
+    assertEquals(
+      ProtoEncoder
+        .toJson(
+          Attribute(
+            "map",
+            AnyValue.map(
+              Map("nested-string" -> AnyValue.string("string"), "nested-long" -> AnyValue.long(123L))
+            ): AnyValue
+          )
+        )
+        .noSpaces,
+      """{"key":"map","value":{"kvlistValue":{"values":[{"key":"nested-string","value":{"stringValue":"string"}},{"key":"nested-long","value":{"intValue":"123"}}]}}}"""
     )
   }
 

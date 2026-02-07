@@ -127,15 +127,15 @@ class OtlpLogRecordExporterSuite extends CatsEffectSuite with ScalaCheckEffectSu
         severityText = lr.severityText,
         body = lr.body,
         eventName = lr.eventName,
-        attributes = lr.attributes.map(_.map(adaptAttribute).to(Attributes)),
+        attributes = lr.attributes.map(_.flatMap(adaptAttribute).to(Attributes)),
         instrumentationScope = InstrumentationScope(
           lr.instrumentationScope.name,
           lr.instrumentationScope.version,
           lr.instrumentationScope.schemaUrl,
-          lr.instrumentationScope.attributes.map(adaptAttribute).to(Attributes),
+          lr.instrumentationScope.attributes.flatMap(adaptAttribute).to(Attributes),
         ),
         resource = TelemetryResource(
-          lr.resource.attributes.map(adaptAttribute).to(Attributes) + Attribute("service.name", serviceName),
+          lr.resource.attributes.flatMap(adaptAttribute).to(Attributes) + Attribute("service.name", serviceName),
           lr.resource.schemaUrl
         )
       )
@@ -201,7 +201,7 @@ class OtlpLogRecordExporterSuite extends CatsEffectSuite with ScalaCheckEffectSu
             (record.attributes.elements ++
               record.instrumentationScope.attributes ++
               record.resource.attributes.filter(_.key.name != "service.name"))
-              .map(prettyAttribute)
+              .flatMap(prettyAttribute)
               .toMap
 
           common ++ attributes
@@ -217,19 +217,24 @@ class OtlpLogRecordExporterSuite extends CatsEffectSuite with ScalaCheckEffectSu
     }
   }
 
-  private def adaptAttribute(attribute: Attribute[_]): Attribute[_] =
+  private def adaptAttribute(attribute: Attribute[_]): Option[Attribute[_]] =
     attribute.key.`type` match {
-      case AttributeType.Boolean    => attribute
-      case AttributeType.Double     => Attribute(attribute.key.name, -100.1)
-      case AttributeType.Long       => attribute
-      case AttributeType.String     => attribute
-      case AttributeType.BooleanSeq => attribute
-      case AttributeType.DoubleSeq  => Attribute(attribute.key.name, Seq(-100.2, 100.3))
-      case AttributeType.LongSeq    => attribute
-      case AttributeType.StringSeq  => attribute
+      case AttributeType.Boolean    => Some(attribute)
+      case AttributeType.Double     => Some(Attribute(attribute.key.name, -100.1))
+      case AttributeType.Long       => Some(attribute)
+      case AttributeType.String     => Some(attribute)
+      case AttributeType.BooleanSeq => Some(attribute)
+      case AttributeType.DoubleSeq  => Some(Attribute(attribute.key.name, Seq(-100.2, 100.3)))
+      case AttributeType.LongSeq    => Some(attribute)
+      case AttributeType.StringSeq  => Some(attribute)
+      case AttributeType.AnyValue   =>
+        attribute.value.asInstanceOf[AnyValue] match {
+          case _: AnyValue.MapValue => None
+          case _                    => Some(attribute)
+        }
     }
 
-  private def prettyAttribute(attribute: Attribute[_]): (String, String) = {
+  private def prettyAttribute(attribute: Attribute[_]): Option[(String, String)] = {
     val key = attribute.key.name
 
     def primitive: String = attribute.value.toString
@@ -237,18 +242,29 @@ class OtlpLogRecordExporterSuite extends CatsEffectSuite with ScalaCheckEffectSu
     def seq[A](f: A => String): String =
       attribute.value.asInstanceOf[Seq[A]].map(f).mkString("[", ",", "]")
 
+    def anyValue: String =
+      attribute.value.asInstanceOf[AnyValue] match {
+        case _: AnyValue.EmptyValue => ""
+        case other                  => AnyValueJsonEncoding.encode(other)
+      }
+
     val value = attribute.key.`type` match {
-      case AttributeType.Boolean    => primitive
-      case AttributeType.Double     => primitive
-      case AttributeType.Long       => primitive
-      case AttributeType.String     => primitive
-      case AttributeType.BooleanSeq => seq[Boolean](_.toString)
-      case AttributeType.DoubleSeq  => seq[Double](_.toString)
-      case AttributeType.LongSeq    => seq[Long](_.toString)
-      case AttributeType.StringSeq  => seq[String](s => "\"" + s + "\"")
+      case AttributeType.Boolean    => Some(primitive)
+      case AttributeType.Double     => Some(primitive)
+      case AttributeType.Long       => Some(primitive)
+      case AttributeType.String     => Some(primitive)
+      case AttributeType.BooleanSeq => Some(seq[Boolean](_.toString))
+      case AttributeType.DoubleSeq  => Some(seq[Double](_.toString))
+      case AttributeType.LongSeq    => Some(seq[Long](_.toString))
+      case AttributeType.StringSeq  => Some(seq[String](s => "\"" + s + "\""))
+      case AttributeType.AnyValue   =>
+        attribute.value.asInstanceOf[AnyValue] match {
+          case _: AnyValue.MapValue => None
+          case _                    => Some(anyValue)
+        }
     }
 
-    (key, value)
+    value.map(v => key -> v)
   }
 
   private def renderBody(body: AnyValue, nested: Boolean = false): String = {
