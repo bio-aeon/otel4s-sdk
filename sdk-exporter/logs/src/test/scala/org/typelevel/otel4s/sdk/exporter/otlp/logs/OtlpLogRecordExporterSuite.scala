@@ -20,6 +20,7 @@ package otlp
 package logs
 
 import cats.effect.IO
+import cats.syntax.functor._
 import com.comcast.ip4s._
 import fs2.io.compression._
 import munit._
@@ -195,6 +196,7 @@ class OtlpLogRecordExporterSuite extends CatsEffectSuite with ScalaCheckEffectSu
             "dropped_attributes_count" -> Some(record.attributes.dropped.toString),
             "trace_id" -> record.traceContext.map(_.traceId.toHex),
             "span_id" -> record.traceContext.map(_.spanId.toHex),
+            "flags" -> record.traceContext.filter(_.isSampled).as("1"),
           ).collect { case (key, Some(value)) => (key, value) }.toMap
 
           val attributes =

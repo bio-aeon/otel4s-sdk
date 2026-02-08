@@ -16,6 +16,7 @@
 
 package org.typelevel.otel4s.sdk.exporter.otlp.logs
 
+import cats.syntax.functor._
 import io.circe.Encoder
 import io.circe.Json
 import io.circe.syntax._
@@ -39,7 +40,9 @@ private object LogsJsonCodecs extends JsonCodecs {
           "attributes" := log.attributes.elements,
           "droppedAttributesCount" := log.attributes.dropped,
           "traceId" := log.traceContext.map(_.traceId.toHex),
-          "spanId" := log.traceContext.map(_.spanId.toHex)
+          "spanId" := log.traceContext.map(_.spanId.toHex),
+          "flags" := log.traceContext.filter(_.isSampled).as(1),
+          "eventName" := log.eventName.filter(_.nonEmpty),
         )
         .dropNullValues
     }
