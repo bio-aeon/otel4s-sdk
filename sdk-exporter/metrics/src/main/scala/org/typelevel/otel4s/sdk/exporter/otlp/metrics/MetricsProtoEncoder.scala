@@ -20,11 +20,13 @@ package exporter.otlp.metrics
 
 import com.google.protobuf.ByteString
 import io.circe.Json
+import org.typelevel.otel4s.sdk.exporter.otlp.OtlpGrpcResponse
 import org.typelevel.otel4s.sdk.exporter.otlp.ProtoEncoder
 import org.typelevel.otel4s.sdk.exporter.proto.{metrics => Proto}
 import org.typelevel.otel4s.sdk.exporter.proto.metrics.ResourceMetrics
 import org.typelevel.otel4s.sdk.exporter.proto.metrics.ScopeMetrics
 import org.typelevel.otel4s.sdk.exporter.proto.metrics_service.ExportMetricsServiceRequest
+import org.typelevel.otel4s.sdk.exporter.proto.metrics_service.ExportMetricsServiceResponse
 import org.typelevel.otel4s.sdk.metrics.data.AggregationTemporality
 import org.typelevel.otel4s.sdk.metrics.data.ExemplarData
 import org.typelevel.otel4s.sdk.metrics.data.MetricData
@@ -34,6 +36,10 @@ import scalapb.descriptors.FieldDescriptor
 import scalapb.descriptors.PByteString
 import scalapb.descriptors.PValue
 import scalapb_circe.Printer
+import scodec.Attempt
+import scodec.DecodeResult
+import scodec.Decoder
+import scodec.bits.BitVector
 import scodec.bits.ByteVector
 
 /** @see
@@ -211,5 +217,21 @@ private object MetricsProtoEncoder {
 
     ExportMetricsServiceRequest(resourceMetrics)
   }
+
+  implicit val grpcResponse: OtlpGrpcResponse[MetricData] =
+    new OtlpGrpcResponse[MetricData] {
+      type Response = ExportMetricsServiceResponse
+
+      val decoder: Decoder[Response] = Decoder { bits =>
+        Attempt
+          .fromTry(ExportMetricsServiceResponse.validate(bits.bytes.toArrayUnsafe))
+          .map(response => DecodeResult(response, BitVector.empty))
+      }
+
+      def partialSuccessMessage(response: Response): Option[String] =
+        response.partialSuccess
+          .filter(r => r.errorMessage.nonEmpty || r.rejectedDataPoints > 0)
+          .map(ps => s"some data points [${ps.rejectedDataPoints}] were rejected due to [${ps.errorMessage}]")
+    }
 
 }

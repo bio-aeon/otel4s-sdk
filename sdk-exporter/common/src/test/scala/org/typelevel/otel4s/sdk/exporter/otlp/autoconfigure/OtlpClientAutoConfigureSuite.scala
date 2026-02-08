@@ -28,6 +28,9 @@ import org.http4s.Uri
 import org.http4s.syntax.literals._
 import org.typelevel.otel4s.sdk.autoconfigure.Config
 import scalapb_circe.Printer
+import scodec.Attempt
+import scodec.DecodeResult
+import scodec.Decoder
 
 import scala.concurrent.duration._
 
@@ -41,6 +44,14 @@ class OtlpClientAutoConfigureSuite extends CatsEffectSuite {
     _ => ???
 
   private implicit val jsonPrinter: Printer = new Printer()
+
+  private implicit val grpcResponse: OtlpGrpcResponse[Payload] =
+    new OtlpGrpcResponse[Payload] {
+      type Response = Unit
+      val decoder: Decoder[Response] =
+        Decoder(bits => Attempt.successful(DecodeResult((), bits)))
+      def partialSuccessMessage(response: Response): Option[String] = None
+    }
 
   private val tracesDefaults = defaults("traces")
   private val metricsDefaults = defaults("metrics")

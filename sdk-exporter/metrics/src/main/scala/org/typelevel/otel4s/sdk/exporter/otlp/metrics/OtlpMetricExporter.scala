@@ -245,6 +245,7 @@ object OtlpMetricExporter {
     def build: Resource[F, MetricExporter.Push[F]] = {
       import MetricsProtoEncoder.exportMetricsRequest
       import MetricsProtoEncoder.jsonPrinter
+      import MetricsProtoEncoder.grpcResponse
 
       val endpoint = this.endpoint.getOrElse {
         protocol match {

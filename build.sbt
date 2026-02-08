@@ -397,6 +397,12 @@ lazy val `sdk-exporter-common` =
         "org.typelevel" %%% "cats-laws" % CatsVersion % Test,
         "org.typelevel" %%% "discipline-munit" % MUnitDisciplineVersion % Test,
         "io.circe" %%% "circe-generic" % CirceVersion % Test
+      ),
+      mimaBinaryIssueFilters ++= Seq(
+        // OtlpClient.Grpc is private
+        ProblemFilters.exclude[DirectMissingMethodProblem](
+          "org.typelevel.otel4s.sdk.exporter.otlp.OtlpClient#Grpc.this"
+        )
       )
     )
     .jsSettings(scalaJSLinkerSettings)

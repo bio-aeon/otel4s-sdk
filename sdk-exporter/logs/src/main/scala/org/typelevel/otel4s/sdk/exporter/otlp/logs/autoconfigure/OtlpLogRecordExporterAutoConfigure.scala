@@ -52,6 +52,7 @@ private final class OtlpLogRecordExporterAutoConfigure[F[_]: Async: Network: Com
   protected def fromConfig(config: Config): Resource[F, LogRecordExporter[F]] = {
     import LogsProtoEncoder.logRecordDataToRequest
     import LogsProtoEncoder.jsonPrinter
+    import LogsProtoEncoder.grpcResponse
 
     val defaults = OtlpClientAutoConfigure.Defaults(
       OtlpLogRecordExporter.Defaults.Protocol,

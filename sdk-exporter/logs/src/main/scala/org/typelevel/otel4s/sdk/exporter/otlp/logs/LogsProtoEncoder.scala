@@ -26,11 +26,16 @@ import org.typelevel.otel4s.sdk.exporter.proto.logs.ResourceLogs
 import org.typelevel.otel4s.sdk.exporter.proto.logs.ScopeLogs
 import org.typelevel.otel4s.sdk.exporter.proto.logs.SeverityNumber
 import org.typelevel.otel4s.sdk.exporter.proto.logs_service.ExportLogsServiceRequest
+import org.typelevel.otel4s.sdk.exporter.proto.logs_service.ExportLogsServiceResponse
 import org.typelevel.otel4s.sdk.logs.data.LogRecordData
 import scalapb.descriptors.FieldDescriptor
 import scalapb.descriptors.PByteString
 import scalapb.descriptors.PValue
 import scalapb_circe.Printer
+import scodec.Attempt
+import scodec.DecodeResult
+import scodec.Decoder
+import scodec.bits.BitVector
 import scodec.bits.ByteVector
 
 /** @see
@@ -115,5 +120,21 @@ private object LogsProtoEncoder {
 
     ExportLogsServiceRequest(resourceLogs)
   }
+
+  implicit val grpcResponse: OtlpGrpcResponse[LogRecordData] =
+    new OtlpGrpcResponse[LogRecordData] {
+      type Response = ExportLogsServiceResponse
+
+      val decoder: Decoder[Response] = Decoder { bits =>
+        Attempt
+          .fromTry(ExportLogsServiceResponse.validate(bits.bytes.toArrayUnsafe))
+          .map(response => DecodeResult(response, BitVector.empty))
+      }
+
+      def partialSuccessMessage(response: Response): Option[String] =
+        response.partialSuccess
+          .filter(r => r.errorMessage.nonEmpty || r.rejectedLogRecords > 0)
+          .map(ps => s"some log records [${ps.rejectedLogRecords}] were rejected due to [${ps.errorMessage}]")
+    }
 
 }

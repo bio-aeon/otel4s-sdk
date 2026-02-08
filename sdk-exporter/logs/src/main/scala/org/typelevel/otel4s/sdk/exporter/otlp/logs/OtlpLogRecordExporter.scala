@@ -188,6 +188,7 @@ object OtlpLogRecordExporter {
     def build: Resource[F, LogRecordExporter[F]] = {
       import LogsProtoEncoder.logRecordDataToRequest
       import LogsProtoEncoder.jsonPrinter
+      import LogsProtoEncoder.grpcResponse
 
       val endpoint = this.endpoint.getOrElse {
         protocol match {

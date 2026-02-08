@@ -86,8 +86,11 @@ private final class OtlpClientAutoConfigure[
     defaults: OtlpClientAutoConfigure.Defaults,
     customClient: Option[Client[F]],
     configKeys: Set[Config.Key[_]]
-)(implicit encoder: ProtoEncoder.Message[List[A]], printer: Printer)
-    extends AutoConfigure.WithHint[F, OtlpClient[F, A]](
+)(implicit
+    encoder: ProtoEncoder.Message[List[A]],
+    printer: Printer,
+    grpcResponse: OtlpGrpcResponse[A]
+) extends AutoConfigure.WithHint[F, OtlpClient[F, A]](
       "OtlpClient",
       configKeys
     ) {
@@ -246,7 +249,8 @@ private[exporter] object OtlpClientAutoConfigure {
       customClient: Option[Client[F]]
   )(implicit
       encoder: ProtoEncoder.Message[List[A]],
-      printer: Printer
+      printer: Printer,
+      grpcResponse: OtlpGrpcResponse[A]
   ): AutoConfigure[F, OtlpClient[F, A]] =
     new OtlpClientAutoConfigure[F, A](
       ConfigKeys.Metrics,
@@ -265,7 +269,8 @@ private[exporter] object OtlpClientAutoConfigure {
       customClient: Option[Client[F]]
   )(implicit
       encoder: ProtoEncoder.Message[List[A]],
-      printer: Printer
+      printer: Printer,
+      grpcResponse: OtlpGrpcResponse[A]
   ): AutoConfigure[F, OtlpClient[F, A]] =
     new OtlpClientAutoConfigure[F, A](
       ConfigKeys.Traces,
@@ -284,7 +289,8 @@ private[exporter] object OtlpClientAutoConfigure {
       customClient: Option[Client[F]]
   )(implicit
       encoder: ProtoEncoder.Message[List[A]],
-      printer: Printer
+      printer: Printer,
+      grpcResponse: OtlpGrpcResponse[A]
   ): AutoConfigure[F, OtlpClient[F, A]] =
     new OtlpClientAutoConfigure[F, A](
       ConfigKeys.Logs,

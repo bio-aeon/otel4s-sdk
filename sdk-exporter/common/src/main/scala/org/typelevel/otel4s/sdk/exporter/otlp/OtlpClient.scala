@@ -56,13 +56,10 @@ import org.typelevel.otel4s.sdk.exporter.RetryPolicy
 import org.typelevel.otel4s.sdk.exporter.otlp.grpc.GrpcCodecs
 import org.typelevel.otel4s.sdk.exporter.otlp.grpc.GrpcHeaders
 import org.typelevel.otel4s.sdk.exporter.otlp.grpc.GrpcStatusException
-import org.typelevel.otel4s.sdk.exporter.proto.trace_service.ExportTraceServiceResponse
 import scalapb_circe.Printer
 import scodec.Attempt
-import scodec.DecodeResult
 import scodec.Decoder
 import scodec.Encoder
-import scodec.bits.BitVector
 import scodec.bits.ByteVector
 
 import scala.concurrent.TimeoutException
@@ -141,7 +138,8 @@ private[otlp] object OtlpClient {
       customClient: Option[Client[F]]
   )(implicit
       encoder: ProtoEncoder.Message[List[A]],
-      printer: Printer
+      printer: Printer,
+      grpcResponse: OtlpGrpcResponse[A]
   ): Resource[F, OtlpClient[F, A]] = {
     val config = Config(protocol, endpoint, timeout, headers, compression)
 
@@ -291,18 +289,16 @@ private[otlp] object OtlpClient {
   private final class Grpc[F[_]: Temporal: Compression: Diagnostic, A](
       config: Config,
       client: Client[F]
-  )(implicit encoder: ProtoEncoder.Message[List[A]])
-      extends OtlpClient[F, A](config, client) {
+  )(implicit
+      encoder: ProtoEncoder.Message[List[A]],
+      grpcResponse: OtlpGrpcResponse[A]
+  ) extends OtlpClient[F, A](config, client) {
 
     private val encode: Encoder[List[A]] = Encoder { a =>
       Attempt.successful(ByteVector.view(ProtoEncoder.toByteArray(a)).bits)
     }
 
-    private val decode: Decoder[ExportTraceServiceResponse] = Decoder { bits =>
-      Attempt
-        .fromTry(ExportTraceServiceResponse.validate(bits.bytes.toArrayUnsafe))
-        .map(a => DecodeResult(a, BitVector.empty))
-    }
+    private val decode: Decoder[grpcResponse.Response] = grpcResponse.decoder
 
     private val bodyStreamEncoder = {
       val isGzip = config.compression match {
@@ -347,16 +343,17 @@ private[otlp] object OtlpClient {
         _ <- checkGrpcStatus(trailingHeaders)
       } yield ()
 
-    private def checkExportStatus(response: ExportTraceServiceResponse): F[Unit] =
-      response.partialSuccess
-        .filter(r => r.errorMessage.nonEmpty || r.rejectedSpans > 0)
-        .traverse_ { ps =>
+    private def checkExportStatus(response: grpcResponse.Response): F[Unit] =
+      grpcResponse.partialSuccessMessage(response) match {
+        case Some(message) =>
           Diagnostic[F].error(
-            s"[OtlpClient(${config.protocol}) ${config.endpoint}]: some spans [${ps.rejectedSpans}] were rejected due to [${ps.errorMessage}]"
+            s"[OtlpClient(${config.protocol}) ${config.endpoint}]: $message"
           )
-        }
+        case None =>
+          Temporal[F].unit
+      }
 
-    private def decodeResponse(response: Response[F]): F[ExportTraceServiceResponse] =
+    private def decodeResponse(response: Response[F]): F[grpcResponse.Response] =
       response.body.through(bodyStreamDecoder).take(1).compile.lastOrError
 
     private def checkGrpcStatus(headers: Headers): F[Unit] = {

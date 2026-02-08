@@ -26,6 +26,7 @@ import org.typelevel.otel4s.sdk.exporter.proto.trace.{Status => StatusProto}
 import org.typelevel.otel4s.sdk.exporter.proto.trace.ResourceSpans
 import org.typelevel.otel4s.sdk.exporter.proto.trace.ScopeSpans
 import org.typelevel.otel4s.sdk.exporter.proto.trace_service.ExportTraceServiceRequest
+import org.typelevel.otel4s.sdk.exporter.proto.trace_service.ExportTraceServiceResponse
 import org.typelevel.otel4s.sdk.trace.data.EventData
 import org.typelevel.otel4s.sdk.trace.data.LinkData
 import org.typelevel.otel4s.sdk.trace.data.SpanData
@@ -36,6 +37,10 @@ import scalapb.descriptors.FieldDescriptor
 import scalapb.descriptors.PByteString
 import scalapb.descriptors.PValue
 import scalapb_circe.Printer
+import scodec.Attempt
+import scodec.DecodeResult
+import scodec.Decoder
+import scodec.bits.BitVector
 import scodec.bits.ByteVector
 
 /** @see
@@ -169,5 +174,21 @@ private object SpansProtoEncoder {
 
     ExportTraceServiceRequest(resourceSpans)
   }
+
+  implicit val grpcResponse: OtlpGrpcResponse[SpanData] =
+    new OtlpGrpcResponse[SpanData] {
+      type Response = ExportTraceServiceResponse
+
+      val decoder: Decoder[Response] = Decoder { bits =>
+        Attempt
+          .fromTry(ExportTraceServiceResponse.validate(bits.bytes.toArrayUnsafe))
+          .map(response => DecodeResult(response, BitVector.empty))
+      }
+
+      def partialSuccessMessage(response: Response): Option[String] =
+        response.partialSuccess
+          .filter(r => r.errorMessage.nonEmpty || r.rejectedSpans > 0)
+          .map(ps => s"some spans [${ps.rejectedSpans}] were rejected due to [${ps.errorMessage}]")
+    }
 
 }

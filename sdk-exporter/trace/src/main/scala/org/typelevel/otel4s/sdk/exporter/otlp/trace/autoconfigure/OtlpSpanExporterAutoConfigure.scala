@@ -52,6 +52,7 @@ private final class OtlpSpanExporterAutoConfigure[
   protected def fromConfig(config: Config): Resource[F, SpanExporter[F]] = {
     import SpansProtoEncoder.spanDataToRequest
     import SpansProtoEncoder.jsonPrinter
+    import SpansProtoEncoder.grpcResponse
 
     val defaults = OtlpClientAutoConfigure.Defaults(
       OtlpSpanExporter.Defaults.Protocol,

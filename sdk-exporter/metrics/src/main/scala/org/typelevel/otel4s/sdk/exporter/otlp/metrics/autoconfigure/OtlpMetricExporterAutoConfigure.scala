@@ -61,6 +61,7 @@ private final class OtlpMetricExporterAutoConfigure[
   protected def fromConfig(config: Config): Resource[F, MetricExporter[F]] = {
     import MetricsProtoEncoder.exportMetricsRequest
     import MetricsProtoEncoder.jsonPrinter
+    import MetricsProtoEncoder.grpcResponse
 
     val defaults = OtlpClientAutoConfigure.Defaults(
       OtlpMetricExporter.Defaults.Protocol,

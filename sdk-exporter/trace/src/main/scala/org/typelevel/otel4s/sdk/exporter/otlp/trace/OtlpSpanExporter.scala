@@ -187,6 +187,7 @@ object OtlpSpanExporter {
     def build: Resource[F, SpanExporter[F]] = {
       import SpansProtoEncoder.spanDataToRequest
       import SpansProtoEncoder.jsonPrinter
+      import SpansProtoEncoder.grpcResponse
 
       val endpoint = this.endpoint.getOrElse {
         protocol match {
