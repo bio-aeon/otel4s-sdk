@@ -22,6 +22,8 @@ import cats.syntax.foldable._
 import fs2.io.compression._
 import munit.CatsEffectSuite
 import org.typelevel.otel4s.sdk.autoconfigure.Config
+import org.typelevel.otel4s.sdk.metrics.InstrumentType
+import org.typelevel.otel4s.sdk.metrics.data.AggregationTemporality
 
 class OtlpMetricExporterAutoConfigureSuite extends CatsEffectSuite {
 
@@ -130,6 +132,110 @@ class OtlpMetricExporterAutoConfigureSuite extends CatsEffectSuite {
                |8) `otel.exporter.otlp.metrics.timeout` - N/A
                |9) `otel.exporter.otlp.protocol` - mqtt
                |10) `otel.exporter.otlp.timeout` - N/A""".stripMargin)
+      )
+  }
+
+  test("load from the config - temporality preference - delta") {
+    val config = Config.ofProps(
+      Map(
+        "otel.exporter.otlp.metrics.temporality.preference" -> "DeLtA"
+      )
+    )
+
+    OtlpMetricExporterAutoConfigure[IO]
+      .configure(config)
+      .use { exporter =>
+        IO {
+          assertEquals(
+            exporter.aggregationTemporalitySelector.select(InstrumentType.Counter),
+            AggregationTemporality.Delta
+          )
+          assertEquals(
+            exporter.aggregationTemporalitySelector.select(InstrumentType.UpDownCounter),
+            AggregationTemporality.Cumulative
+          )
+          assertEquals(
+            exporter.aggregationTemporalitySelector.select(InstrumentType.ObservableCounter),
+            AggregationTemporality.Delta
+          )
+        }
+      }
+  }
+
+  test("load from the config - temporality preference - lowmemory") {
+    val config = Config.ofProps(
+      Map(
+        "otel.exporter.otlp.metrics.temporality.preference" -> "LOWMEMORY"
+      )
+    )
+
+    OtlpMetricExporterAutoConfigure[IO]
+      .configure(config)
+      .use { exporter =>
+        IO {
+          assertEquals(
+            exporter.aggregationTemporalitySelector.select(InstrumentType.Counter),
+            AggregationTemporality.Delta
+          )
+          assertEquals(
+            exporter.aggregationTemporalitySelector.select(InstrumentType.ObservableCounter),
+            AggregationTemporality.Cumulative
+          )
+        }
+      }
+  }
+
+  test("load from the config - invalid temporality preference - fail") {
+    val config = Config.ofProps(
+      Map(
+        "otel.exporter.otlp.metrics.temporality.preference" -> "fast"
+      )
+    )
+
+    OtlpMetricExporterAutoConfigure[IO]
+      .configure(config)
+      .use_
+      .attempt
+      .map(_.leftMap(_.getMessage))
+      .assertEquals(
+        Left("""Cannot autoconfigure [OtlpMetricExporter].
+               |Cause: Unrecognized aggregation temporality preference [fast]. Supported options [cumulative, delta, lowmemory].
+               |Config:
+               |1) `otel.exporter.otlp.metrics.default.histogram.aggregation` - N/A
+               |2) `otel.exporter.otlp.metrics.temporality.preference` - fast""".stripMargin)
+      )
+  }
+
+  test("load from the config - histogram aggregation explicit bucket") {
+    val config = Config.ofProps(
+      Map(
+        "otel.exporter.otlp.metrics.default.histogram.aggregation" -> "EXPLICIT_BUCKET_HISTOGRAM"
+      )
+    )
+
+    OtlpMetricExporterAutoConfigure[IO]
+      .configure(config)
+      .use_ // explicit_bucket_histogram maps to the SDK default histogram aggregation
+  }
+
+  test("load from the config - histogram aggregation base2 exponential - fail") {
+    val config = Config.ofProps(
+      Map(
+        "otel.exporter.otlp.metrics.default.histogram.aggregation" -> "base2_exponential_bucket_histogram"
+      )
+    )
+
+    OtlpMetricExporterAutoConfigure[IO]
+      .configure(config)
+      .use_
+      .attempt
+      .map(_.leftMap(_.getMessage))
+      .assertEquals(
+        Left("""Cannot autoconfigure [OtlpMetricExporter].
+               |Cause: Unrecognized default histogram aggregation [base2_exponential_bucket_histogram]. Supported options [explicit_bucket_histogram].
+               |Config:
+               |1) `otel.exporter.otlp.metrics.default.histogram.aggregation` - base2_exponential_bucket_histogram
+               |2) `otel.exporter.otlp.metrics.temporality.preference` - N/A""".stripMargin)
       )
   }
 

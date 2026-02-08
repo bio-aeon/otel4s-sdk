@@ -256,8 +256,8 @@ The compliance matrix below is based on the [OpenTelemetry Specification](https:
 | OTEL\\_METRIC\\_EXPORT\\_INTERVAL | `+` |  | [MetricReadersAutoConfigure.scala](@OTEL4S_SDK_GITHUB_URL@/sdk/metrics/src/main/scala/org/typelevel/otel4s/sdk/metrics/autoconfigure/MetricReadersAutoConfigure.scala#L36-L37) |
 | OTEL\\_METRIC\\_EXPORT\\_TIMEOUT | `+` |  | [MetricReadersAutoConfigure.scala](@OTEL4S_SDK_GITHUB_URL@/sdk/metrics/src/main/scala/org/typelevel/otel4s/sdk/metrics/autoconfigure/MetricReadersAutoConfigure.scala#L36-L37) |
 | OTEL\\_METRICS\\_EXEMPLAR\\_FILTER | `+` |  | [ExemplarFilterAutoConfigure.scala](@OTEL4S_SDK_GITHUB_URL@/sdk/metrics/src/main/scala/org/typelevel/otel4s/sdk/metrics/autoconfigure/ExemplarFilterAutoConfigure.scala#L33-L33) |
-| OTEL\\_EXPORTER\\_OTLP\\_METRICS\\_TEMPORALITY\\_PREFERENCE | `-` |  |  |
-| OTEL\\_EXPORTER\\_OTLP\\_METRICS\\_DEFAULT\\_HISTOGRAM\\_AGGREGATION | `-` |  |  |
+| OTEL\\_EXPORTER\\_OTLP\\_METRICS\\_TEMPORALITY\\_PREFERENCE | `+` |  | [OtlpMetricExporterAutoConfigure.scala](@OTEL4S_SDK_GITHUB_URL@/sdk-exporter/metrics/src/main/scala/org/typelevel/otel4s/sdk/exporter/otlp/metrics/autoconfigure/OtlpMetricExporterAutoConfigure.scala#L102-L118), [OtlpMetricExporterAutoConfigureSuite.scala](@OTEL4S_SDK_GITHUB_URL@/sdk-exporter/metrics/src/test/scala/org/typelevel/otel4s/sdk/exporter/otlp/metrics/autoconfigure/OtlpMetricExporterAutoConfigureSuite.scala#L138-L186) |
+| OTEL\\_EXPORTER\\_OTLP\\_METRICS\\_DEFAULT\\_HISTOGRAM\\_AGGREGATION | `+` |  | [OtlpMetricExporterAutoConfigure.scala](@OTEL4S_SDK_GITHUB_URL@/sdk-exporter/metrics/src/main/scala/org/typelevel/otel4s/sdk/exporter/otlp/metrics/autoconfigure/OtlpMetricExporterAutoConfigure.scala#L120-L138), [OtlpMetricExporterAutoConfigureSuite.scala](@OTEL4S_SDK_GITHUB_URL@/sdk-exporter/metrics/src/test/scala/org/typelevel/otel4s/sdk/exporter/otlp/metrics/autoconfigure/OtlpMetricExporterAutoConfigureSuite.scala#L209-L239) |
 | OTEL\\_EXPERIMENTAL\\_CONFIG\\_FILE | `-` |  |  |
 
 ## Declarative configuration
