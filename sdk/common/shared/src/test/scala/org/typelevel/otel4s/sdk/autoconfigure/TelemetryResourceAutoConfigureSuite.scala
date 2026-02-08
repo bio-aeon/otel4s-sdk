@@ -158,4 +158,59 @@ class TelemetryResourceAutoConfigureSuite extends CatsEffectSuite {
         IO(assertEquals(resource.attributes.map(_.key.name).toSet, all))
       }
   }
+
+  test("fail when an extra detector name duplicates a built-in detector name") {
+    val config = Config(Map.empty, Map.empty, Map.empty)
+
+    val duplicateHostDetector = new TelemetryResourceDetector.Unsealed[IO] {
+      def name: String = "host"
+      def detect: IO[Option[TelemetryResource]] = IO.pure(None)
+    }
+
+    TelemetryResourceAutoConfigure[IO](Set(duplicateHostDetector))
+      .configure(config)
+      .use_
+      .attempt
+      .map {
+        case Left(error) =>
+          assert(
+            error.getMessage.contains(
+              "Duplicate resource detector names are not allowed: [host]"
+            )
+          )
+        case Right(_) =>
+          fail("Expected duplicate resource detector name error")
+      }
+  }
+
+  test("fail when multiple extra detectors have the same name") {
+    val config = Config(Map.empty, Map.empty, Map.empty)
+
+    val detector1 = new TelemetryResourceDetector.Unsealed[IO] {
+      def name: String = "custom"
+      def detect: IO[Option[TelemetryResource]] =
+        IO.pure(Some(TelemetryResource(Attributes(Attribute("custom1", true)))))
+    }
+
+    val detector2 = new TelemetryResourceDetector.Unsealed[IO] {
+      def name: String = "custom"
+      def detect: IO[Option[TelemetryResource]] =
+        IO.pure(Some(TelemetryResource(Attributes(Attribute("custom2", true)))))
+    }
+
+    TelemetryResourceAutoConfigure[IO](Set(detector1, detector2))
+      .configure(config)
+      .use_
+      .attempt
+      .map {
+        case Left(error) =>
+          assert(
+            error.getMessage.contains(
+              "Duplicate resource detector names are not allowed: [custom]"
+            )
+          )
+        case Right(_) =>
+          fail("Expected duplicate resource detector name error")
+      }
+  }
 }
