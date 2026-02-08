@@ -629,6 +629,7 @@ lazy val docs = project
       "com.outr" %% "scribe" % ScribeVersion,
     ),
     run / fork := true,
+    tlSiteApiPackage := Some("org.typelevel.otel4s.sdk"),
     laikaConfig := {
       import laika.config.{ChoiceConfig, Selections, SelectionConfig}
 
