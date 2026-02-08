@@ -67,6 +67,7 @@ private final class TelemetryResourceAutoConfigure[F[_]: Sync: SystemProperties:
 
   def fromConfig(config: Config): Resource[F, TelemetryResource] =
     for {
+      _ <- Resource.eval(validateDetectorNames)
       disabledKeys <- Resource.eval(
         Sync[F].fromEither(
           config.getOrElse(ConfigKeys.DisabledKeys, Set.empty[String])
@@ -186,6 +187,18 @@ private final class TelemetryResourceAutoConfigure[F[_]: Sync: SystemProperties:
       case Left(error) =>
         Resource.raiseError(error: Throwable)
     }
+  }
+
+  private def validateDetectorNames: F[Unit] = {
+    val duplicates = detectors
+      .groupBy(_.name)
+      .collect { case (name, colliding) if colliding.sizeIs > 1 => name }
+
+    Sync[F].raiseWhen(duplicates.nonEmpty)(
+      ConfigurationError(
+        s"Duplicate resource detector names are not allowed: [${duplicates.mkString(", ")}]"
+      )
+    )
   }
 
 }
