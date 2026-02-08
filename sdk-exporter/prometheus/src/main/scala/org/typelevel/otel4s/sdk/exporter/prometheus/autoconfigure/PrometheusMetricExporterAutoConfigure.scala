@@ -51,6 +51,9 @@ import scala.util.chaining._
   *
   * @see
   *   [[https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/prometheus/#configuration]]
+  *
+  * @see
+  *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#prometheus-exporter]]
   */
 private final class PrometheusMetricExporterAutoConfigure[
     F[_]: Network: Compression: Diagnostic
@@ -194,6 +197,9 @@ object PrometheusMetricExporterAutoConfigure {
     *
     * @see
     *   [[https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/prometheus/#configuration]]
+    *
+    * @see
+    *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#prometheus-exporter]]
     */
   def apply[
       F[_]: Async: Network: Compression: Diagnostic

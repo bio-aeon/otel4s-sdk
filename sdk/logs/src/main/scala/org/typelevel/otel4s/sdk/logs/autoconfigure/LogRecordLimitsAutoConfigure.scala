@@ -39,6 +39,9 @@ import scala.util.chaining._
   *
   * @see
   *   [[https://opentelemetry.io/docs/languages/java/configuration/#properties-general]]
+  *
+  * @see
+  *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#logrecord-limits]]
   */
 private final class LogRecordLimitsAutoConfigure[F[_]: MonadCancelThrow]
     extends AutoConfigure.WithHint[F, LogRecordLimits](
@@ -90,6 +93,9 @@ private[sdk] object LogRecordLimitsAutoConfigure {
     *
     * @see
     *   [[https://opentelemetry.io/docs/languages/java/configuration/#properties-general]]
+    *
+    * @see
+    *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#logrecord-limits]]
     */
   def apply[F[_]: MonadCancelThrow]: AutoConfigure[F, LogRecordLimits] =
     new LogRecordLimitsAutoConfigure[F]

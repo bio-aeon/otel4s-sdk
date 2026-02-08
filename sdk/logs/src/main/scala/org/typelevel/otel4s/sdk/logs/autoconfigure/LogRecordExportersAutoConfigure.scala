@@ -41,6 +41,9 @@ import org.typelevel.otel4s.sdk.logs.exporter.LogRecordExporter
   *
   * @see
   *   [[https://opentelemetry.io/docs/languages/java/configuration/#properties-exporters]]
+  *
+  * @see
+  *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#exporter-selection]]
   */
 private final class LogRecordExportersAutoConfigure[F[_]: MonadCancelThrow: Console: Diagnostic](
     extra: Set[AutoConfigure.Named[F, LogRecordExporter[F]]]
@@ -153,6 +156,9 @@ private[sdk] object LogRecordExportersAutoConfigure {
     *
     * @see
     *   [[https://opentelemetry.io/docs/languages/java/configuration/#properties-exporters]]
+    *
+    * @see
+    *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#exporter-selection]]
     *
     * @param configurers
     *   the configurers to use

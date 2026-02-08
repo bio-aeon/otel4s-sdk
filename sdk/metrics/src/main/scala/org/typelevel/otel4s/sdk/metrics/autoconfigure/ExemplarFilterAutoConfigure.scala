@@ -40,6 +40,9 @@ import org.typelevel.otel4s.sdk.metrics.exemplar.ExemplarFilter
   *
   * @see
   *   [[https://opentelemetry.io/docs/languages/java/configuration/#exemplars]]
+  *
+  * @see
+  *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#exemplar]]
   */
 private final class ExemplarFilterAutoConfigure[F[_]: MonadCancelThrow](
     lookup: TraceContext.Lookup
@@ -114,6 +117,9 @@ private[sdk] object ExemplarFilterAutoConfigure {
     *
     * @see
     *   [[https://opentelemetry.io/docs/languages/java/configuration/#exemplars]]
+    *
+    * @see
+    *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#exemplar]]
     *
     * @param traceContextLookup
     *   used by the exemplar reservoir to extract tracing information from the context

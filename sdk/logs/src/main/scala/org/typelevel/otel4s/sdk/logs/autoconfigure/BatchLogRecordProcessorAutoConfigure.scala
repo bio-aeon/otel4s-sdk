@@ -48,6 +48,9 @@ import scala.util.chaining._
   * @see
   *   [[https://opentelemetry.io/docs/languages/java/configuration/#properties-logs]]
   *
+  * @see
+  *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#batch-logrecord-processor]]
+  *
   * @param exporter
   *   the exporter to use with the configured batch log record processor
   */
@@ -117,6 +120,9 @@ private[sdk] object BatchLogRecordProcessorAutoConfigure {
     *
     * @see
     *   [[https://opentelemetry.io/docs/languages/java/configuration/#properties-logs]]
+    *
+    * @see
+    *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#batch-logrecord-processor]]
     *
     * @param exporter
     *   the exporter to use with the configured batch log record processor

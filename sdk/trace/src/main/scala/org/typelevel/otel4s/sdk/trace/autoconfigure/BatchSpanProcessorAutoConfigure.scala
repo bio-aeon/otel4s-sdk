@@ -45,6 +45,9 @@ import scala.util.chaining._
   * @see
   *   [[https://opentelemetry.io/docs/languages/java/configuration/#batch-span-processor]]
   *
+  * @see
+  *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#batch-span-processor]]
+  *
   * @param exporter
   *   the exporter to use with the configured batch span processor
   */
@@ -114,6 +117,9 @@ private[sdk] object BatchSpanProcessorAutoConfigure {
     *
     * @see
     *   [[https://opentelemetry.io/docs/languages/java/configuration/#batch-span-processor]]
+    *
+    * @see
+    *   [[https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#batch-span-processor]]
     *
     * @param exporter
     *   the exporter to use with the configured batch span processor
