@@ -18,12 +18,14 @@ package org.typelevel.otel4s.sdk.exporter.otlp.metrics.autoconfigure
 
 import cats.effect.Async
 import cats.effect.Resource
+import cats.effect.syntax.resource._
 import fs2.compression.Compression
 import fs2.io.net.Network
 import org.http4s.Headers
 import org.http4s.client.Client
 import org.typelevel.otel4s.sdk.autoconfigure.AutoConfigure
 import org.typelevel.otel4s.sdk.autoconfigure.Config
+import org.typelevel.otel4s.sdk.autoconfigure.ConfigurationError
 import org.typelevel.otel4s.sdk.common.Diagnostic
 import org.typelevel.otel4s.sdk.exporter.otlp.autoconfigure.OtlpClientAutoConfigure
 import org.typelevel.otel4s.sdk.exporter.otlp.metrics.MetricsProtoEncoder
@@ -33,6 +35,8 @@ import org.typelevel.otel4s.sdk.metrics.exporter.AggregationSelector
 import org.typelevel.otel4s.sdk.metrics.exporter.AggregationTemporalitySelector
 import org.typelevel.otel4s.sdk.metrics.exporter.CardinalityLimitSelector
 import org.typelevel.otel4s.sdk.metrics.exporter.MetricExporter
+
+import java.util.Locale
 
 /** Autoconfigures OTLP [[org.typelevel.otel4s.sdk.metrics.exporter.MetricExporter MetricExporter]].
   *
@@ -47,9 +51,10 @@ private final class OtlpMetricExporterAutoConfigure[
 ](customClient: Option[Client[F]])
     extends AutoConfigure.WithHint[F, MetricExporter[F]](
       "OtlpMetricExporter",
-      Set.empty
+      OtlpMetricExporterAutoConfigure.ConfigKeys.All
     )
     with AutoConfigure.Named.Unsealed[F, MetricExporter[F]] {
+  import OtlpMetricExporterAutoConfigure.ConfigKeys
 
   def name: String = "otlp"
 
@@ -66,22 +71,89 @@ private final class OtlpMetricExporterAutoConfigure[
       OtlpMetricExporter.Defaults.Compression
     )
 
-    OtlpClientAutoConfigure
-      .metrics[F, MetricData](defaults, customClient)
-      .configure(config)
-      .map { client =>
-        new OtlpMetricExporter[F](
-          client,
-          AggregationTemporalitySelector.alwaysCumulative,
-          AggregationSelector.default,
-          CardinalityLimitSelector.default
+    for {
+      temporality <- Async[F]
+        .fromEither(
+          config.getOrElse(
+            ConfigKeys.TemporalityPreference,
+            AggregationTemporalitySelector.alwaysCumulative
+          )
         )
-      }
+        .toResource
+      defaultAggregation <- Async[F]
+        .fromEither(
+          config.getOrElse(
+            ConfigKeys.DefaultHistogramAggregation,
+            AggregationSelector.default
+          )
+        )
+        .toResource
+      client <- OtlpClientAutoConfigure
+        .metrics[F, MetricData](defaults, customClient)
+        .configure(config)
+    } yield new OtlpMetricExporter[F](
+      client,
+      temporality,
+      defaultAggregation,
+      CardinalityLimitSelector.default
+    )
   }
 
+  private implicit val aggregationTemporalityReader: Config.Reader[AggregationTemporalitySelector] =
+    Config.Reader.decodeWithHint("AggregationTemporalitySelector") { s =>
+      s.toLowerCase(Locale.ROOT) match {
+        case "cumulative" =>
+          Right(AggregationTemporalitySelector.alwaysCumulative)
+
+        case "delta" =>
+          Right(AggregationTemporalitySelector.deltaPreferred)
+
+        case "lowmemory" =>
+          Right(AggregationTemporalitySelector.lowMemory)
+
+        case _ =>
+          Left(
+            ConfigurationError(
+              s"Unrecognized aggregation temporality preference [$s]. Supported options [cumulative, delta, lowmemory]"
+            )
+          )
+      }
+    }
+
+  private implicit val defaultAggregationReader: Config.Reader[AggregationSelector] =
+    Config.Reader.decodeWithHint("AggregationSelector") { s =>
+      s.toLowerCase(Locale.ROOT) match {
+        case "explicit_bucket_histogram" =>
+          Right(AggregationSelector.default)
+
+        case "base2_exponential_bucket_histogram" =>
+          Left(
+            ConfigurationError(
+              "Unrecognized default histogram aggregation [base2_exponential_bucket_histogram]. Supported options [explicit_bucket_histogram]"
+            )
+          )
+
+        case _ =>
+          Left(
+            ConfigurationError(
+              s"Unrecognized default histogram aggregation [$s]. Supported options [explicit_bucket_histogram]"
+            )
+          )
+      }
+    }
 }
 
 object OtlpMetricExporterAutoConfigure {
+  private object ConfigKeys {
+    val TemporalityPreference: Config.Key[AggregationTemporalitySelector] =
+      Config.Key("otel.exporter.otlp.metrics.temporality.preference")
+
+    val DefaultHistogramAggregation: Config.Key[AggregationSelector] =
+      Config.Key("otel.exporter.otlp.metrics.default.histogram.aggregation")
+
+    val All: Set[Config.Key[_]] =
+      Set(TemporalityPreference, DefaultHistogramAggregation)
+  }
 
   /** Autoconfigures OTLP [[org.typelevel.otel4s.sdk.metrics.exporter.MetricExporter MetricExporter]].
     *
