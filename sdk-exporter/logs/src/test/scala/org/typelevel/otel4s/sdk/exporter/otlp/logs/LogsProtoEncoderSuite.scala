@@ -19,6 +19,7 @@ package sdk
 package exporter.otlp
 package logs
 
+import cats.syntax.functor._
 import io.circe.Json
 import io.circe.syntax._
 import munit._
@@ -44,7 +45,9 @@ class LogsProtoEncoderSuite extends ScalaCheckSuite {
           "attributes" := logRecord.attributes.elements,
           "droppedAttributesCount" := logRecord.attributes.dropped,
           "traceId" := logRecord.traceContext.map(_.traceId.toHex),
-          "spanId" := logRecord.traceContext.map(_.spanId.toHex)
+          "spanId" := logRecord.traceContext.map(_.spanId.toHex),
+          "flags" := logRecord.traceContext.filter(_.isSampled).as(1),
+          "eventName" := logRecord.eventName.filter(_.nonEmpty),
         )
         .dropNullValues
 
