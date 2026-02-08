@@ -36,8 +36,8 @@ class LogRecordLimitsAutoConfigureSuite extends CatsEffectSuite {
 
   test("load from the config (empty string) - load default") {
     val props = Map(
-      "otel.attribute.count.limit" -> "",
-      "otel.attribute.value.length.limit" -> "",
+      "otel.logrecord.attribute.count.limit" -> "",
+      "otel.logrecord.attribute.value.length.limit" -> "",
     )
 
     val config = Config.ofProps(props)
@@ -50,6 +50,48 @@ class LogRecordLimitsAutoConfigureSuite extends CatsEffectSuite {
   }
 
   test("load from the config - use given value") {
+    val props = Map(
+      "otel.logrecord.attribute.count.limit" -> "100",
+      "otel.logrecord.attribute.value.length.limit" -> "105",
+    )
+
+    val config = Config.ofProps(props)
+
+    val expected =
+      "LogRecordLimits{maxNumberOfAttributes=100, maxAttributeValueLength=105}"
+
+    LogRecordLimitsAutoConfigure[IO]
+      .configure(config)
+      .use { limits =>
+        IO(assertEquals(limits.toString, expected))
+      }
+  }
+
+  test("invalid config value - fail") {
+    val config = Config.ofProps(Map("otel.logrecord.attribute.count.limit" -> "not int"))
+    val error =
+      "Invalid value for property otel.logrecord.attribute.count.limit=not int. Must be [Int]"
+
+    LogRecordLimitsAutoConfigure[IO]
+      .configure(config)
+      .evalMap(IO.println)
+      .use_
+      .attempt
+      .map(_.leftMap(_.getMessage))
+      .assertEquals(
+        Left(
+          s"""Cannot autoconfigure [LogRecordLimits].
+             |Cause: $error.
+             |Config:
+             |1) `otel.attribute.count.limit` - N/A
+             |2) `otel.attribute.value.length.limit` - N/A
+             |3) `otel.logrecord.attribute.count.limit` - not int
+             |4) `otel.logrecord.attribute.value.length.limit` - N/A""".stripMargin
+        )
+      )
+  }
+
+  test("load from the config - global attribute limits are supported as fallback") {
     val props = Map(
       "otel.attribute.count.limit" -> "100",
       "otel.attribute.value.length.limit" -> "105",
@@ -67,26 +109,24 @@ class LogRecordLimitsAutoConfigureSuite extends CatsEffectSuite {
       }
   }
 
-  test("invalid config value - fail") {
-    val config = Config.ofProps(Map("otel.attribute.count.limit" -> "not int"))
-    val error =
-      "Invalid value for property otel.attribute.count.limit=not int. Must be [Int]"
+  test("load from the config - logrecord keys are prioritized over global") {
+    val props = Map(
+      "otel.logrecord.attribute.count.limit" -> "100",
+      "otel.logrecord.attribute.value.length.limit" -> "105",
+      "otel.attribute.count.limit" -> "200",
+      "otel.attribute.value.length.limit" -> "205",
+    )
+
+    val config = Config.ofProps(props)
+
+    val expected =
+      "LogRecordLimits{maxNumberOfAttributes=100, maxAttributeValueLength=105}"
 
     LogRecordLimitsAutoConfigure[IO]
       .configure(config)
-      .evalMap(IO.println)
-      .use_
-      .attempt
-      .map(_.leftMap(_.getMessage))
-      .assertEquals(
-        Left(
-          s"""Cannot autoconfigure [LogRecordLimits].
-             |Cause: $error.
-             |Config:
-             |1) `otel.attribute.count.limit` - not int
-             |2) `otel.attribute.value.length.limit` - N/A""".stripMargin
-        )
-      )
+      .use { limits =>
+        IO(assertEquals(limits.toString, expected))
+      }
   }
 
 }

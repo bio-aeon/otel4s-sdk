@@ -99,14 +99,66 @@ class SpanLimitsAutoConfigureSuite extends CatsEffectSuite {
           s"""Cannot autoconfigure [SpanLimits].
              |Cause: $error.
              |Config:
-             |1) `otel.event.attribute.count.limit` - N/A
-             |2) `otel.link.attribute.count.limit` - N/A
-             |3) `otel.span.attribute.count.limit` - not int
-             |4) `otel.span.attribute.value.length.limit` - N/A
-             |5) `otel.span.event.count.limit` - N/A
-             |6) `otel.span.link.count.limit` - N/A""".stripMargin
+             |1) `otel.attribute.count.limit` - N/A
+             |2) `otel.attribute.value.length.limit` - N/A
+             |3) `otel.event.attribute.count.limit` - N/A
+             |4) `otel.link.attribute.count.limit` - N/A
+             |5) `otel.span.attribute.count.limit` - not int
+             |6) `otel.span.attribute.value.length.limit` - N/A
+             |7) `otel.span.event.count.limit` - N/A
+             |8) `otel.span.link.count.limit` - N/A""".stripMargin
         )
       )
+  }
+
+  test("load from the config - global attribute limits are supported as fallback") {
+    val props = Map(
+      "otel.attribute.count.limit" -> "100",
+      "otel.attribute.value.length.limit" -> "105",
+    )
+
+    val config = Config.ofProps(props)
+
+    val expected =
+      "SpanLimits{" +
+        "maxNumberOfAttributes=100, " +
+        "maxNumberOfEvents=128, " +
+        "maxNumberOfLinks=128, " +
+        "maxNumberOfAttributesPerEvent=128, " +
+        "maxNumberOfAttributesPerLink=128, " +
+        "maxAttributeValueLength=105}"
+
+    SpanLimitsAutoConfigure[IO]
+      .configure(config)
+      .use { limits =>
+        IO(assertEquals(limits.show, expected))
+      }
+  }
+
+  test("load from the config - span attribute limits are prioritized over global") {
+    val props = Map(
+      "otel.span.attribute.count.limit" -> "100",
+      "otel.span.attribute.value.length.limit" -> "105",
+      "otel.attribute.count.limit" -> "200",
+      "otel.attribute.value.length.limit" -> "205",
+    )
+
+    val config = Config.ofProps(props)
+
+    val expected =
+      "SpanLimits{" +
+        "maxNumberOfAttributes=100, " +
+        "maxNumberOfEvents=128, " +
+        "maxNumberOfLinks=128, " +
+        "maxNumberOfAttributesPerEvent=128, " +
+        "maxNumberOfAttributesPerLink=128, " +
+        "maxAttributeValueLength=105}"
+
+    SpanLimitsAutoConfigure[IO]
+      .configure(config)
+      .use { limits =>
+        IO(assertEquals(limits.show, expected))
+      }
   }
 
 }

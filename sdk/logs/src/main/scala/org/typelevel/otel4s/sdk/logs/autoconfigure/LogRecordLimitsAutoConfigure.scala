@@ -18,6 +18,7 @@ package org.typelevel.otel4s.sdk.logs.autoconfigure
 
 import cats.effect.MonadCancelThrow
 import cats.effect.Resource
+import org.typelevel.otel4s.sdk.autoconfigure.AttributeLimitsConfigurer
 import org.typelevel.otel4s.sdk.autoconfigure.AutoConfigure
 import org.typelevel.otel4s.sdk.autoconfigure.Config
 import org.typelevel.otel4s.sdk.logs.LogRecordLimits
@@ -28,10 +29,12 @@ import scala.util.chaining._
   *
   * The configuration options:
   * {{{
-  * | System property                   | Environment variable              | Description                                                    |
-  * |-----------------------------------|-----------------------------------|----------------------------------------------------------------|
-  * | otel.attribute.count.limit        | OTEL_ATTRIBUTE_COUNT_LIMIT        | The maximum allowed span attribute count. Default is `128`.    |
-  * | otel.attribute.value.length.limit | OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT | The maximum allowed attribute value size. No limit by default. |
+  * | System property                             | Environment variable                        | Description                                                       |
+  * |---------------------------------------------|---------------------------------------------|-------------------------------------------------------------------|
+  * | otel.logrecord.attribute.count.limit        | OTEL_LOGRECORD_ATTRIBUTE_COUNT_LIMIT        | The maximum allowed log record attribute count. Default is `128`. |
+  * | otel.logrecord.attribute.value.length.limit | OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT | The maximum allowed attribute value size. No limit by default.    |
+  * | otel.attribute.count.limit                  | OTEL_ATTRIBUTE_COUNT_LIMIT                  | Global fallback for attribute count limit.                        |
+  * | otel.attribute.value.length.limit           | OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT           | Global fallback for attribute value length limit.                 |
   * }}}
   *
   * @see
@@ -54,8 +57,14 @@ private final class LogRecordLimitsAutoConfigure[F[_]: MonadCancelThrow]
   def fromConfig(config: Config): Resource[F, LogRecordLimits] = {
     def configure =
       for {
-        maxNumberOfAttributes <- config.get(ConfigKeys.MaxNumberOfAttributes)
-        maxAttributeValueLength <- config.get(ConfigKeys.MaxAttributeValueLength)
+        maxNumberOfAttributes <- AttributeLimitsConfigurer.maxNumberOfAttributes(
+          config,
+          ConfigKeys.MaxNumberOfAttributes
+        )
+        maxAttributeValueLength <- AttributeLimitsConfigurer.maxAttributeValueLength(
+          config,
+          ConfigKeys.MaxAttributeValueLength
+        )
       } yield LogRecordLimits.builder
         .pipe(b => maxNumberOfAttributes.foldLeft(b)(_.withMaxNumberOfAttributes(_)))
         .pipe(b => maxAttributeValueLength.foldLeft(b)(_.withMaxAttributeValueLength(_)))
@@ -69,23 +78,30 @@ private[sdk] object LogRecordLimitsAutoConfigure {
 
   private object ConfigKeys {
     val MaxNumberOfAttributes: Config.Key[Int] =
-      Config.Key("otel.attribute.count.limit")
+      Config.Key("otel.logrecord.attribute.count.limit")
 
     val MaxAttributeValueLength: Config.Key[Int] =
-      Config.Key("otel.attribute.value.length.limit")
+      Config.Key("otel.logrecord.attribute.value.length.limit")
 
     val All: Set[Config.Key[_]] =
-      Set(MaxNumberOfAttributes, MaxAttributeValueLength)
+      Set(
+        MaxNumberOfAttributes,
+        MaxAttributeValueLength,
+        AttributeLimitsConfigurer.ConfigKeys.MaxNumberOfAttributes,
+        AttributeLimitsConfigurer.ConfigKeys.MaxAttributeValueLength
+      )
   }
 
   /** Returns [[AutoConfigure]] that configures the [[LogRecordLimits]].
     *
     * The configuration options:
     * {{{
-    * | System property                   | Environment variable              | Description                                                    |
-    * |-----------------------------------|-----------------------------------|----------------------------------------------------------------|
-    * | otel.attribute.count.limit        | OTEL_ATTRIBUTE_COUNT_LIMIT        | The maximum allowed span attribute count. Default is `128`.    |
-    * | otel.attribute.value.length.limit | OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT | The maximum allowed attribute value size. No limit by default. |
+    * | System property                             | Environment variable                        | Description                                                       |
+    * |---------------------------------------------|---------------------------------------------|-------------------------------------------------------------------|
+    * | otel.logrecord.attribute.count.limit        | OTEL_LOGRECORD_ATTRIBUTE_COUNT_LIMIT        | The maximum allowed log record attribute count. Default is `128`. |
+    * | otel.logrecord.attribute.value.length.limit | OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT | The maximum allowed attribute value size. No limit by default.    |
+    * | otel.attribute.count.limit                  | OTEL_ATTRIBUTE_COUNT_LIMIT                  | Global fallback for attribute count limit.                        |
+    * | otel.attribute.value.length.limit           | OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT           | Global fallback for attribute value length limit.                 |
     * }}}
     *
     * @see

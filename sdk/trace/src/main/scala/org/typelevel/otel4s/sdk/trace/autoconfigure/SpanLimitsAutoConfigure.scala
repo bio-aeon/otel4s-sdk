@@ -18,6 +18,7 @@ package org.typelevel.otel4s.sdk.trace.autoconfigure
 
 import cats.effect.MonadCancelThrow
 import cats.effect.Resource
+import org.typelevel.otel4s.sdk.autoconfigure.AttributeLimitsConfigurer
 import org.typelevel.otel4s.sdk.autoconfigure.AutoConfigure
 import org.typelevel.otel4s.sdk.autoconfigure.Config
 import org.typelevel.otel4s.sdk.trace.SpanLimits
@@ -34,6 +35,8 @@ import org.typelevel.otel4s.sdk.trace.SpanLimits
   * | otel.event.attribute.count.limit         | OTEL_EVENT_ATTRIBUTE_COUNT_LIMIT         | The maximum allowed attribute per span event count. Default is `128`. |
   * | otel.link.attribute.count.limit          | OTEL_LINK_ATTRIBUTE_COUNT_LIMIT          | The maximum allowed attribute per span link count. Default is `128`.  |
   * | otel.span.attribute.value.length.limit   | OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT   | The maximum allowed attribute value size. No limit by default.        |
+  * | otel.attribute.count.limit               | OTEL_ATTRIBUTE_COUNT_LIMIT               | Global fallback for span attribute count limit.                       |
+  * | otel.attribute.value.length.limit        | OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT        | Global fallback for span attribute value length limit.                |
   * }}}
   *
   * @see
@@ -50,7 +53,10 @@ private final class SpanLimitsAutoConfigure[F[_]: MonadCancelThrow]
   def fromConfig(config: Config): Resource[F, SpanLimits] = {
     def configure =
       for {
-        maxNumberOfAttributes <- config.get(ConfigKeys.MaxNumberOfAttributes)
+        maxNumberOfAttributes <- AttributeLimitsConfigurer.maxNumberOfAttributes(
+          config,
+          ConfigKeys.MaxNumberOfAttributes
+        )
         maxNumberOfEvents <- config.get(ConfigKeys.MaxNumberOfEvents)
         maxNumberOfLinks <- config.get(ConfigKeys.MaxNumberOfLinks)
         maxNumberOfAttributesPerEvent <- config.get(
@@ -59,7 +65,8 @@ private final class SpanLimitsAutoConfigure[F[_]: MonadCancelThrow]
         maxNumberOfAttributesPerLink <- config.get(
           ConfigKeys.MaxNumberOfAttributesPerLink
         )
-        maxAttributeValueLength <- config.get(
+        maxAttributeValueLength <- AttributeLimitsConfigurer.maxAttributeValueLength(
+          config,
           ConfigKeys.MaxAttributeValueLength
         )
       } yield {
@@ -132,7 +139,9 @@ private[sdk] object SpanLimitsAutoConfigure {
         MaxNumberOfLinks,
         MaxNumberOfAttributesPerEvent,
         MaxNumberOfAttributesPerLink,
-        MaxAttributeValueLength
+        MaxAttributeValueLength,
+        AttributeLimitsConfigurer.ConfigKeys.MaxNumberOfAttributes,
+        AttributeLimitsConfigurer.ConfigKeys.MaxAttributeValueLength
       )
   }
 
@@ -148,6 +157,8 @@ private[sdk] object SpanLimitsAutoConfigure {
     * | otel.event.attribute.count.limit         | OTEL_EVENT_ATTRIBUTE_COUNT_LIMIT         | The maximum allowed attribute per span event count. Default is `128`. |
     * | otel.link.attribute.count.limit          | OTEL_LINK_ATTRIBUTE_COUNT_LIMIT          | The maximum allowed attribute per span link count. Default is `128`.  |
     * | otel.span.attribute.value.length.limit   | OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT   | The maximum allowed attribute value size. No limit by default.        |
+    * | otel.attribute.count.limit               | OTEL_ATTRIBUTE_COUNT_LIMIT               | Global fallback for span attribute count limit.                       |
+    * | otel.attribute.value.length.limit        | OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT        | Global fallback for span attribute value length limit.                |
     * }}}
     *
     * @see

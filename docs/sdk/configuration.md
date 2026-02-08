@@ -242,6 +242,8 @@ These properties can be used to control the maximum size of spans by placing lim
 | otel.event.attribute.count.limit         | OTEL\\_EVENT\\_ATTRIBUTE\\_COUNT\\_LIMIT         | The maximum allowed attribute per span event count. Default is `128`. |
 | otel.link.attribute.count.limit          | OTEL\\_LINK\\_ATTRIBUTE\\_COUNT\\_LIMIT          | The maximum allowed attribute per span link count. Default is `128`.  |
 | otel.span.attribute.value.length.limit   | OTEL\\_SPAN\\_ATTRIBUTE\\_VALUE\\_LENGTH\\_LIMIT | The maximum allowed attribute value size. No limit by default.        |
+| otel.attribute.count.limit               | OTEL\\_ATTRIBUTE\\_COUNT\\_LIMIT                 | Global fallback for span attribute count limit.                       |
+| otel.attribute.value.length.limit        | OTEL\\_ATTRIBUTE\\_VALUE\\_LENGTH\\_LIMIT        | Global fallback for span attribute value length limit.                |
 
 ## Logs
 
@@ -296,7 +298,9 @@ Target-specific properties are prioritized. E.g. `otel.exporter.otlp.logs.endpoi
 
 These properties can be used to control the maximum size of log records by placing limits on attributes.
 
-| System property                   | Environment variable                      | Description                                                    |
-|-----------------------------------|-------------------------------------------|----------------------------------------------------------------|
-| otel.attribute.count.limit        | OTEL\\_ATTRIBUTE\\_COUNT\\_LIMIT          | The maximum allowed log attribute count. Default is `128`.     |
-| otel.attribute.value.length.limit | OTEL\\_ATTRIBUTE\\_VALUE\\_LENGTH\\_LIMIT | The maximum allowed attribute value size. No limit by default. |
+| System property                             | Environment variable                                  | Description                                                       |
+|---------------------------------------------|-------------------------------------------------------|-------------------------------------------------------------------|
+| otel.logrecord.attribute.count.limit        | OTEL\\_LOGRECORD\\_ATTRIBUTE\\_COUNT\\_LIMIT          | The maximum allowed log record attribute count. Default is `128`. |
+| otel.logrecord.attribute.value.length.limit | OTEL\\_LOGRECORD\\_ATTRIBUTE\\_VALUE\\_LENGTH\\_LIMIT | The maximum allowed attribute value size. No limit by default.    |
+| otel.attribute.count.limit                  | OTEL\\_ATTRIBUTE\\_COUNT\\_LIMIT                      | Global fallback for attribute count limit.                        |
+| otel.attribute.value.length.limit           | OTEL\\_ATTRIBUTE\\_VALUE\\_LENGTH\\_LIMIT             | Global fallback for attribute value length limit.                 |
