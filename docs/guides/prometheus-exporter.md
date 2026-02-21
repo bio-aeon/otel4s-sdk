@@ -1,7 +1,7 @@
-# Prometheus Exporter
+# Export metrics with Prometheus
 
 The exporter exports metrics in a prometheus-compatible format, so Prometheus can scrape metrics from the HTTP server.
-You can either allow exporter to launch its own server or add Prometheus routes to the existing one. 
+You can either allow the exporter to launch its own server or add Prometheus routes to the existing one. 
 
 An example of output (e.g. `curl -H "Accept:text/plain" http://localhost:9464/metrics`):
 ```scala mdoc:passthrough
@@ -70,7 +70,7 @@ Add directives to the `*.scala` file:
 
 The `OpenTelemetrySdk.autoConfigured(...)` and `SdkMetrics.autoConfigured(...)` rely on the environment variables 
 and system properties to configure the SDK.
-Check out the [configuration details](configuration.md#prometheus-exporter).
+Check out the [configuration details](../sdk/configuration.md#prometheus-exporter).
 
 ## Autoconfigured (built-in server)
 
@@ -86,7 +86,12 @@ Add settings to the `build.sbt`:
 ```scala
 javaOptions += "-Dotel.metrics.exporter=prometheus"
 javaOptions += "-Dotel.traces.exporter=none"
-envVars ++= Map("OTEL_METRICS_EXPORTER" -> "prometheus", "OTEL_TRACES_EXPORTER" -> "none")
+javaOptions += "-Dotel.logs.exporter=none"
+envVars ++= Map(
+  "OTEL_METRICS_EXPORTER" -> "prometheus", 
+  "OTEL_TRACES_EXPORTER" -> "none", 
+  "OTEL_LOGS_EXPORTER" -> "none"
+)
 ```
 
 @:choice(scala-cli)
@@ -96,6 +101,7 @@ Add directives to the `*.scala` file:
 ```scala
 //> using javaOpt -Dotel.metrics.exporter=prometheus
 //> using javaOpt -Dotel.traces.exporter=none
+//> using javaOpt -Dotel.logs.exporter=none
 ```
 
 @:choice(shell)
@@ -103,6 +109,7 @@ Add directives to the `*.scala` file:
 ```shell
 $ export OTEL_METRICS_EXPORTER=prometheus
 $ export OTEL_TRACES_EXPORTER=none
+$ export OTEL_LOGS_EXPORTER=none
 ```
 @:@
 
@@ -202,7 +209,12 @@ Add settings to the `build.sbt`:
 ```scala
 javaOptions += "-Dotel.metrics.exporter=none"
 javaOptions += "-Dotel.traces.exporter=none"
-envVars ++= Map("OTEL_METRICS_EXPORTER" -> "none", "OTEL_TRACES_EXPORTER" -> "none")
+javaOptions += "-Dotel.logs.exporter=none"
+envVars ++= Map(
+  "OTEL_METRICS_EXPORTER" -> "none", 
+  "OTEL_TRACES_EXPORTER" -> "none",
+  "OTEL_LOGS_EXPORTER" -> "none"
+)
 ```
 
 @:choice(scala-cli)
@@ -212,6 +224,7 @@ Add directives to the `*.scala` file:
 ```scala
 //> using javaOpt -Dotel.metrics.exporter=none
 //> using javaOpt -Dotel.traces.exporter=none
+//> using javaOpt -Dotel.logs.exporter=none
 ```
 
 @:choice(shell)
@@ -219,6 +232,7 @@ Add directives to the `*.scala` file:
 ```shell
 $ export OTEL_METRICS_EXPORTER=none
 $ export OTEL_TRACES_EXPORTER=none
+$ export OTEL_LOGS_EXPORTER=none
 ```
 @:@
 
