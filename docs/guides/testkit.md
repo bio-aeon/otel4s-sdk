@@ -115,13 +115,11 @@ object TelemetryMetric {
 }
 ```
 
-`MetricData` provides **all** information about the metric:
-name, instrumentation scope, telemetry resource, data points, 
-associated attributes, collection time window, and so on.
+`MetricData` contains far more than most tests need:
+metric metadata, resource and scope details, data points, attributes, collection windows, exemplars, and more.
 
-It's hard to implement an assertion that verifies **all** aspects of the metric 
-because many things must be considered, such as time window, attributes, exemplars, etc.
-To simplify the testing process, we define a minimized projection of `MetricData`, named `TelemetryMetric`. 
+In tests, it is often more maintainable to assert on a focused projection of the signal.
+In this example, `TelemetryMetric` keeps only the pieces we care about and ignores noisy fields.
 
 ```scala mdoc:invisible
 // we silently run the test to ensure it's actually correct
@@ -250,12 +248,11 @@ object SpanTree {
 }
 ```
 
-`SpanData` provides **all** information about the span:
-name, instrumentation scope, telemetry resource, associated attributes, time window, and so on.
+`SpanData` also includes much more than we usually want to verify in a unit test:
+resource and scope metadata, attributes, timing information, links, events, and status.
 
-It's difficult to implement an assertion that verifies **all** aspects of the span 
-because many things must be considered, such as time windows, attributes, etc. 
-To simplify the testing process, we define a minimized projection of `SpanData`, named `TelemetrySpan`.
+For stable assertions, project each span into a smaller domain model first.
+Here, `TelemetrySpan` captures only the span name, while `SpanTree` validates parent-child structure.
 
 ```scala mdoc:invisible
 // we silently run the test to ensure it's actually correct
