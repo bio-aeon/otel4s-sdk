@@ -1,4 +1,4 @@
-# AWS | X-Ray ID Generator
+# X-Ray ID generator
 
 The AWS X-Ray ID generator generates trace IDs that are compatible with AWS X-Ray tracing [spec][xray-traceid].
 An example of the AWS X-Ray trace and span IDs:

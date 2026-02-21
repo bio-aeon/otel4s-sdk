@@ -1,4 +1,4 @@
-# AWS | Resource detectors
+# Resource detectors
 
 Resource detectors can add environment-specific attributes to the telemetry resource.
 AWS detectors are implemented as a third-party library, and you need to enable them manually.
@@ -449,7 +449,7 @@ object TelemetryApp extends IOApp.Simple {
 ## Configuration
 
 The `OpenTelemetrySdk.autoConfigured(...)` and `SdkTraces.autoConfigured(...)` rely on the environment variables and system properties to configure the SDK.
-Check out the [configuration details](configuration.md#telemetry-resource-detectors).
+Check out the [configuration details](../sdk/configuration.md#telemetry-resource-detectors).
 
 There are several ways to configure the options:
 
@@ -461,7 +461,7 @@ Add settings to the `build.sbt`:
 
 ```scala
 javaOptions += "-Dotel.otel4s.resource.detectors.enabled=aws-lambda,aws-ec2,aws-ecs,aws-eks,aws-beanstalk"
-envVars ++= Map("OTEL_OTEL4S_RESOURCE_DETECTORS_ENABLE" -> "aws-lambda,aws-ec2,aws-ecs,aws-eks,aws-beanstalk")
+envVars ++= Map("OTEL_OTEL4S_RESOURCE_DETECTORS_ENABLED" -> "aws-lambda,aws-ec2,aws-ecs,aws-eks,aws-beanstalk")
 ```
 
 @:choice(scala-cli)

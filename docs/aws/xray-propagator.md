@@ -1,4 +1,4 @@
-# AWS | X-Ray propagator
+# X-Ray propagator
 
 The X-Ray propagator implements AWS X-Ray Trace Header [propagation protocol][xray-concepts].
 The propagator utilizes `X-Amzn-Trace-Id` header to extract and inject tracing details.
