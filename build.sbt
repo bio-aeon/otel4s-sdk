@@ -97,6 +97,7 @@ val CaseInsensitiveVersion = "1.4.2"
 val ScalaJavaTimeVersion = "2.6.0"
 val ScribeVersion = "3.17.0"
 val Otel4sVersion = "0.15.1"
+val ProtobufJavaVersion = "3.25.8"
 
 lazy val scalaReflectDependency = Def.settings(
   libraryDependencies ++= {
@@ -373,7 +374,11 @@ lazy val `sdk-exporter-proto` =
       libraryDependencies ++= {
         if (tlIsScala3.value) Nil
         else Seq("ch.epfl.scala" %% "scalafix-core" % _root_.scalafix.sbt.BuildInfo.scalafixVersion % ScalafixConfig)
-      }
+      },
+      // we use old scalapb version because we cannot update to SN 0.5., so we explicitly define a newer version
+      libraryDependencies ++= Seq(
+        "com.google.protobuf" % "protobuf-java" % ProtobufJavaVersion,
+      ),
     )
 
 lazy val `sdk-exporter-common` =
