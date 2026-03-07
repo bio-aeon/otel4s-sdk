@@ -42,6 +42,13 @@ sealed trait IdGenerator[F[_]] {
     */
   def generateTraceId: F[ByteVector]
 
+  /** Whether generated trace ids satisfy the W3C Trace Context randomness requirements.
+    *
+    * If `true`, spans started with generated root trace ids should set the random-trace-id flag.
+    */
+  private[trace] def generatesRandomTraceId: Boolean =
+    false
+
   /** Whether it's safe to skip the ID validation: we are sure the generated ids are valid.
     */
   private[trace] def canSkipIdValidation: Boolean =
@@ -70,6 +77,9 @@ object IdGenerator {
         hi <- Random[F].nextLong
         lo <- Random[F].nextLong.iterateUntil(_ != InvalidId)
       } yield SpanContext.TraceId.fromLongs(hi, lo)
+
+    override private[trace] def generatesRandomTraceId: Boolean =
+      true
 
     // we trust ourselves
     override private[trace] def canSkipIdValidation: Boolean =

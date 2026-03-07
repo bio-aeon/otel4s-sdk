@@ -75,5 +75,7 @@ class AwsXRayIdGenerator[F[_]: Monad: Clock: Random] extends IdGenerator.Unseale
         TraceId.fromLongs(timestampSecs << 32 | hiRandom, lowRandom)
     }
 
+  override private[trace] val generatesRandomTraceId: Boolean = true
+
   override private[trace] val canSkipIdValidation: Boolean = true
 }

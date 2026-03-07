@@ -43,6 +43,7 @@ import org.typelevel.otel4s.trace.SpanContext
 import org.typelevel.otel4s.trace.SpanKind
 import org.typelevel.otel4s.trace.TraceScope
 import org.typelevel.otel4s.trace.meta.InstrumentMeta
+import scodec.bits.ByteVector
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -113,10 +114,18 @@ class SdkSpanBuilderSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
           spans <- inMemory.finishedSpans
         } yield {
           val links = linkDataInput.toLinks
+          val expectedRandomFlag =
+            parent
+              .filter(_.isValid)
+              .exists(_.traceFlags.isTraceIdRandom) || parent.forall(!_.isValid)
 
           assertEquals(spans.map(_.spanContext.isValid), List(true))
           assertEquals(spans.map(_.spanContext.isRemote), List(false))
           assertEquals(spans.map(_.spanContext.isSampled), List(true))
+          assertEquals(
+            spans.map(_.spanContext.traceFlags.isTraceIdRandom),
+            List(expectedRandomFlag)
+          )
           assertEquals(spans.map(_.name), List(name))
           assertEquals(spans.map(_.parentSpanContext), List(parent))
           assertEquals(spans.map(_.kind), List(kind))
@@ -141,8 +150,66 @@ class SdkSpanBuilderSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
         assertEquals(span.context.isValid, true)
         assertEquals(span.context.isRemote, false)
         assertEquals(span.context.isSampled, false)
+        assertEquals(span.context.traceFlags.isTraceIdRandom, true)
         assertEquals(spans, Nil)
       }
+    }
+  }
+
+  test("create a root span with random-trace-id bit when id generator is random") {
+    for {
+      traceScope <- createTraceScope
+      inMemory <- InMemorySpanExporter.create[IO](None)
+      state <- createState(
+        inMemory,
+        SpanLimits.default,
+        Sampler.alwaysOn,
+        SdkSpanBuilderSuite.TestIdGenerator(randomTraceId = true)
+      )
+      builder = SdkSpanBuilder("span", InstrumentationScope.builder("scope").build, state, traceScope)
+      span <- builder.build.use(IO.pure)
+    } yield {
+      assertEquals(span.context.traceFlags.isTraceIdRandom, true)
+      assertEquals(span.context.traceFlags.isSampled, true)
+    }
+  }
+
+  test("create a root span without random-trace-id bit when id generator is not random") {
+    for {
+      traceScope <- createTraceScope
+      inMemory <- InMemorySpanExporter.create[IO](None)
+      state <- createState(
+        inMemory,
+        SpanLimits.default,
+        Sampler.alwaysOn,
+        SdkSpanBuilderSuite.TestIdGenerator(randomTraceId = false)
+      )
+      builder = SdkSpanBuilder("span", InstrumentationScope.builder("scope").build, state, traceScope)
+      span <- builder.build.use(IO.pure)
+    } yield {
+      assertEquals(span.context.traceFlags.isTraceIdRandom, false)
+      assertEquals(span.context.traceFlags.isSampled, true)
+    }
+  }
+
+  test("propagate random-trace-id bit from parent span") {
+    for {
+      traceScope <- createTraceScope
+      inMemory <- InMemorySpanExporter.create[IO](None)
+      state <- createState(
+        inMemory,
+        SpanLimits.default,
+        Sampler.alwaysOn,
+        SdkSpanBuilderSuite.TestIdGenerator(randomTraceId = true)
+      )
+      parentBuilder = SdkSpanBuilder("parent", InstrumentationScope.builder("scope").build, state, traceScope)
+      childBuilder = SdkSpanBuilder("child", InstrumentationScope.builder("scope").build, state, traceScope)
+      childFlags <- parentBuilder.build.use { _ =>
+        childBuilder.build.use(span => IO.pure(span.context.traceFlags))
+      }
+    } yield {
+      assertEquals(childFlags.isTraceIdRandom, true)
+      assertEquals(childFlags.isSampled, true)
     }
   }
 
@@ -157,17 +224,25 @@ class SdkSpanBuilderSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
       sampler: Sampler[IO] = Sampler.alwaysOn
   ): IO[TracerSharedState[IO]] =
     Random.scalaUtilRandom[IO].flatMap { implicit random =>
-      SpanStorage.create[IO].map { spanStorage =>
-        TracerSharedState(
-          IdGenerator.random[IO],
-          TelemetryResource.default,
-          spanLimits,
-          sampler,
-          SimpleSpanProcessor(exporter),
-          spanStorage,
-          InstrumentMeta.enabled
-        )
-      }
+      createState(exporter, spanLimits, sampler, IdGenerator.random[IO])
+    }
+
+  private def createState(
+      exporter: SpanExporter[IO],
+      spanLimits: SpanLimits,
+      sampler: Sampler[IO],
+      idGenerator: IdGenerator[IO]
+  ): IO[TracerSharedState[IO]] =
+    SpanStorage.create[IO].map { spanStorage =>
+      TracerSharedState(
+        idGenerator,
+        TelemetryResource.default,
+        spanLimits,
+        sampler,
+        SimpleSpanProcessor(exporter),
+        spanStorage,
+        InstrumentMeta.enabled
+      )
     }
 
   override protected def scalaCheckTestParameters: Test.Parameters =
@@ -178,6 +253,16 @@ class SdkSpanBuilderSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
 }
 
 object SdkSpanBuilderSuite {
+  private[trace] final case class TestIdGenerator(randomTraceId: Boolean) extends IdGenerator.Unsealed[IO] {
+    private val traceId = ByteVector.fromValidHex("0102030405060708090a0b0c0d0e0f10")
+    private val spanId = ByteVector.fromValidHex("0102030405060708")
+
+    override def generateSpanId: IO[ByteVector] = IO.pure(spanId)
+    override def generateTraceId: IO[ByteVector] = IO.pure(traceId)
+    override private[trace] val canSkipIdValidation: Boolean = true
+    override private[trace] val generatesRandomTraceId: Boolean = randomTraceId
+  }
+
   final case class LinkDataInput(
       maxNumberOfAttributes: Int,
       items: Vector[LinkDataInput.LinkItem]
