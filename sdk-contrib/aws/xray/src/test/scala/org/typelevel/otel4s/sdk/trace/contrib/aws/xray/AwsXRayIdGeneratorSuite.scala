@@ -96,6 +96,16 @@ class AwsXRayIdGeneratorSuite extends CatsEffectSuite with ScalaCheckEffectSuite
     }
   }
 
+  test("generatesRandomTraceId is true") {
+    PropF.forAllNoShrinkF(Gen.long) {
+      Random.scalaUtilRandomSeedLong[IO](_).flatMap { implicit testRandom =>
+        IO {
+          assert(AwsXRayIdGenerator[IO].generatesRandomTraceId)
+        }
+      }
+    }
+  }
+
 }
 
 object IntermittentlyZeroRandom {

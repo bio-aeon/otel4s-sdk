@@ -40,6 +40,10 @@ class IdGeneratorSuite extends CatsEffectSuite {
     IO(assert(generator.canSkipIdValidation))
   }
 
+  generatorTest("should declare random trace ids") { generator =>
+    IO(assert(generator.generatesRandomTraceId))
+  }
+
   private def generatorTest(
       name: String
   )(body: IdGenerator[IO] => IO[Unit]): Unit =

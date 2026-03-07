@@ -154,9 +154,15 @@ private final case class SdkSpanBuilder[F[_]: Temporal: Diagnostic] private (
       backend <- {
         val samplingDecision = samplingResult.decision
 
-        val traceFlags =
-          if (samplingDecision.isSampled) TraceFlags.Sampled
-          else TraceFlags.Default
+        val traceFlags = {
+          val isTraceIdRandom = parentSpanContext
+            .filter(_.isValid)
+            .fold(tracerSharedState.idGenerator.generatesRandomTraceId)(_.traceFlags.isTraceIdRandom)
+
+          TraceFlags.Default
+            .withRandomTraceId(isTraceIdRandom)
+            .withSampled(samplingDecision.isSampled)
+        }
 
         val traceState =
           parentSpanContext.fold(TraceState.empty) { ctx =>
