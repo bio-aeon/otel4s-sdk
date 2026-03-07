@@ -28,7 +28,6 @@ import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.semconv.SchemaUrls
 import org.typelevel.otel4s.semconv.attributes.ServiceAttributes
 import org.typelevel.otel4s.semconv.experimental.attributes.CloudExperimentalAttributes._
-import org.typelevel.otel4s.semconv.experimental.attributes.ServiceExperimentalAttributes._
 
 class AwsBeanstalkDetectorSuite extends CatsEffectSuite {
 
@@ -48,8 +47,8 @@ class AwsBeanstalkDetectorSuite extends CatsEffectSuite {
         Attributes(
           CloudProvider(CloudProviderValue.Aws.value),
           CloudPlatform(CloudPlatformValue.AwsElasticBeanstalk.value),
-          ServiceInstanceId(id.toString),
-          ServiceNamespace(envName),
+          ServiceAttributes.ServiceInstanceId(id.toString),
+          ServiceAttributes.ServiceNamespace(envName),
           ServiceAttributes.ServiceVersion(versionLabel)
         ),
         Some(SchemaUrls.Current)

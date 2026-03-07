@@ -88,8 +88,8 @@ object AwsBeanstalkDetector {
   private object Keys {
     val CloudProvider: AttributeKey[String] = AttributeKey("cloud.provider")
     val CloudPlatform: AttributeKey[String] = AttributeKey("cloud.platform")
-    val ServiceInstanceId: AttributeKey[String] = AttributeKey("service.instance.id")
-    val ServiceNamespace: AttributeKey[String] = AttributeKey("service.namespace")
+    val ServiceInstanceId: AttributeKey[String] = ServiceAttributes.ServiceInstanceId
+    val ServiceNamespace: AttributeKey[String] = ServiceAttributes.ServiceNamespace
     val ServiceVersion: AttributeKey[String] = ServiceAttributes.ServiceVersion
   }
 
