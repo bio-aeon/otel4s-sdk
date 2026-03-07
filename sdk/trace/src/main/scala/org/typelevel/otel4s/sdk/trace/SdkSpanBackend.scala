@@ -181,6 +181,9 @@ private final class SdkSpanBackend[F[_]: Monad: Clock: Diagnostic] private (
       _ <- toSpanData.flatMap(span => spanProcessor.onEnd(span)).whenA(updated)
     } yield ()
 
+  def isRecording: F[Boolean] =
+    mutableState.get.map(_.endTimestamp.isEmpty)
+
   private def addTimedEvent(event: EventData): F[Unit] =
     updateState("addEvent")(s => s.copy(events = s.events.append(event))).void
 

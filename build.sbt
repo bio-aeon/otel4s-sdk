@@ -96,7 +96,7 @@ val ScalaPBCirceVersion = "0.15.1"
 val CaseInsensitiveVersion = "1.4.2"
 val ScalaJavaTimeVersion = "2.6.0"
 val ScribeVersion = "3.17.0"
-val Otel4sVersion = "0.15.1"
+val Otel4sVersion = "0.15.2"
 val ProtobufJavaVersion = "3.25.8"
 
 lazy val scalaReflectDependency = Def.settings(

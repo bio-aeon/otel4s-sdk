@@ -261,6 +261,21 @@ class SdkSpanBackendSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
     } yield assertEquals(span.meta.isEnabled, true)
   }
 
+  test(".isRecording - span not ended") {
+    for {
+      span <- start()
+      isRecording <- span.isRecording
+    } yield assertEquals(isRecording, true)
+  }
+
+  test(".isRecording - span ended") {
+    for {
+      span <- start()
+      _ <- span.end
+      isRecording <- span.isRecording
+    } yield assertEquals(isRecording, false)
+  }
+
   // SpanRef methods
 
   test(".getAttribute(:AttributeKey)") {

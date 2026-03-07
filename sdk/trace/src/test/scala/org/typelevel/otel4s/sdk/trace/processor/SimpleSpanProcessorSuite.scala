@@ -189,6 +189,9 @@ class SimpleSpanProcessorSuite extends CatsEffectSuite with ScalaCheckEffectSuit
 
       def end(timestamp: FiniteDuration): IO[Unit] =
         noopBackend.end(timestamp)
+
+      def isRecording: IO[Boolean] =
+        noopBackend.isRecording
     }
   }
 

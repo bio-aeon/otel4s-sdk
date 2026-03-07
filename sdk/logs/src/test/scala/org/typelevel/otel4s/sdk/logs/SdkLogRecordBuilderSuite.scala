@@ -35,8 +35,8 @@ import org.typelevel.otel4s.sdk.logs.scalacheck.Arbitraries._
 import org.typelevel.otel4s.semconv.attributes.ExceptionAttributes
 
 import scala.concurrent.duration._
-import scala.util.control.NoStackTrace
 import scala.util.chaining._
+import scala.util.control.NoStackTrace
 
 class SdkLogRecordBuilderSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
 
