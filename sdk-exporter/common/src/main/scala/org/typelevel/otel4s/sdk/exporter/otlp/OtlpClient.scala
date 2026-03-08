@@ -170,8 +170,9 @@ private[otlp] object OtlpClient {
 
     def backoff(attempt: Int): Option[FiniteDuration] =
       Option.when(attempt < retryPolicy.maxAttempts) {
+        val jitterMultiplier = math.random()
         val next =
-          retryPolicy.initialBackoff * attempt.toLong * retryPolicy.backoffMultiplier
+          retryPolicy.initialBackoff * attempt.toLong * (jitterMultiplier * retryPolicy.backoffMultiplier)
 
         val delay =
           next.min(retryPolicy.maxBackoff)
