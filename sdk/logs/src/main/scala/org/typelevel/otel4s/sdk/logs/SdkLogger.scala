@@ -17,6 +17,7 @@
 package org.typelevel.otel4s.sdk.logs
 
 import cats.effect.Temporal
+import cats.mtl.Ask
 import org.typelevel.otel4s.logs.LogRecordBuilder
 import org.typelevel.otel4s.logs.Logger
 import org.typelevel.otel4s.logs.meta.InstrumentMeta
@@ -43,5 +44,8 @@ private final class SdkLogger[F[_]: Temporal: AskContext](
 
   def logRecordBuilder: LogRecordBuilder[F, Context] =
     SdkLogRecordBuilder.empty(processor, instrumentationScope, resource, traceContextLookup, logRecordLimits)
+
+  def currentContext: F[Context] =
+    Ask.ask[F, Context]
 
 }
