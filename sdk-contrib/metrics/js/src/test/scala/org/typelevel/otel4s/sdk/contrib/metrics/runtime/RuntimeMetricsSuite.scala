@@ -53,8 +53,8 @@ class RuntimeMetricsSuite extends CatsEffectSuite {
       // V8 JS Memory
       V8jsExperimentalMetrics.MemoryHeapUsed,
       V8jsExperimentalMetrics.MemoryHeapLimit,
-      V8jsExperimentalMetrics.HeapSpacePhysicalSize,
-      V8jsExperimentalMetrics.HeapSpaceAvailableSize,
+      V8jsExperimentalMetrics.MemoryHeapSpacePhysicalSize,
+      V8jsExperimentalMetrics.MemoryHeapSpaceAvailableSize,
       // thread
       // ProcessExperimentalMetrics.ThreadCount,
     )

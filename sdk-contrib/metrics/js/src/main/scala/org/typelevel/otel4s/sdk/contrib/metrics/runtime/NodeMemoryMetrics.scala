@@ -79,8 +79,8 @@ private object NodeMemoryMetrics {
   private object MetricNames {
     val V8jsMemoryHeapLimit = "v8js.memory.heap.limit"
     val V8jsMemoryHeapUsed = "v8js.memory.heap.used"
-    val V8jsHeapSpaceAvailableSize = "v8js.heap.space.available_size"
-    val V8jsHeapSpacePhysicalSize = "v8js.heap.space.physical_size"
+    val V8jsHeapSpaceAvailableSize = "v8js.memory.heap.space.available_size"
+    val V8jsHeapSpacePhysicalSize = "v8js.memory.heap.space.physical_size"
   }
 
   private object Keys {
