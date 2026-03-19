@@ -66,6 +66,8 @@ sealed trait ExemplarData {
 
 object ExemplarData {
 
+  type Aux[A] = ExemplarData { type Value = A }
+
   sealed trait LongExemplar extends ExemplarData { type Value = Long }
 
   sealed trait DoubleExemplar extends ExemplarData { type Value = Double }
