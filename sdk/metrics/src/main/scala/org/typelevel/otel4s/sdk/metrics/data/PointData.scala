@@ -79,6 +79,10 @@ object PointData {
     def value: Value
   }
 
+  object NumberPoint {
+    type Aux[A] = NumberPoint { type Value = A }
+  }
+
   sealed trait LongNumber extends NumberPoint {
     type Exemplar = ExemplarData.LongExemplar
     type Value = Long
