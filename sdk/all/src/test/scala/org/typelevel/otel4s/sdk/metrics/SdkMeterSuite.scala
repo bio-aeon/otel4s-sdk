@@ -16,7 +16,6 @@
 
 package org.typelevel.otel4s.sdk.metrics
 
-import cats.data.NonEmptyVector
 import cats.effect.IO
 import cats.effect.Resource
 import cats.effect.SyncIO
@@ -26,9 +25,9 @@ import cats.syntax.traverse._
 import munit.CatsEffectSuite
 import munit.Location
 import munit.TestOptions
-import org.typelevel.otel4s.Attributes
 import org.typelevel.otel4s.context.LocalProvider
 import org.typelevel.otel4s.metrics.BucketBoundaries
+import org.typelevel.otel4s.metrics.MeasurementValue
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.sdk.common.Diagnostic
@@ -36,19 +35,23 @@ import org.typelevel.otel4s.sdk.common.InstrumentationScope
 import org.typelevel.otel4s.sdk.context.Context
 import org.typelevel.otel4s.sdk.context.TraceContext
 import org.typelevel.otel4s.sdk.metrics.data.AggregationTemporality
-import org.typelevel.otel4s.sdk.metrics.data.ExemplarData
 import org.typelevel.otel4s.sdk.metrics.data.MetricData
-import org.typelevel.otel4s.sdk.metrics.data.MetricPoints
-import org.typelevel.otel4s.sdk.metrics.data.PointData
-import org.typelevel.otel4s.sdk.metrics.data.TimeWindow
 import org.typelevel.otel4s.sdk.metrics.exporter.AggregationSelector
 import org.typelevel.otel4s.sdk.metrics.exporter.AggregationTemporalitySelector
 import org.typelevel.otel4s.sdk.metrics.exporter.CardinalityLimitSelector
+import org.typelevel.otel4s.sdk.testkit.InstrumentationScopeExpectation
+import org.typelevel.otel4s.sdk.testkit.TelemetryResourceExpectation
+import org.typelevel.otel4s.sdk.testkit.metrics.ExemplarExpectation
+import org.typelevel.otel4s.sdk.testkit.metrics.MetricExpectation
+import org.typelevel.otel4s.sdk.testkit.metrics.MetricExpectations
 import org.typelevel.otel4s.sdk.testkit.metrics.MetricsTestkit
+import org.typelevel.otel4s.sdk.testkit.metrics.NumberComparison
+import org.typelevel.otel4s.sdk.testkit.metrics.PointExpectation
 import scodec.bits.ByteVector
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration._
+import scala.util.chaining._
 
 class SdkMeterSuite extends CatsEffectSuite {
 
@@ -80,7 +83,7 @@ class SdkMeterSuite extends CatsEffectSuite {
       counter <- meter.counter[Long]("counter").create
       _ <- counter.add(5L)
       metrics <- sdk.collectMetrics
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("Counter - increment") { sdk =>
@@ -91,7 +94,7 @@ class SdkMeterSuite extends CatsEffectSuite {
       counter <- meter.counter[Long]("counter").create
       _ <- counter.inc()
       metrics <- sdk.collectMetrics
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("Gauge - record values") { sdk =>
@@ -102,7 +105,7 @@ class SdkMeterSuite extends CatsEffectSuite {
       gauge <- meter.gauge[Long]("gauge").create
       _ <- gauge.record(1L)
       metrics <- sdk.collectMetrics
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("UpDownCounter - record values") { sdk =>
@@ -113,7 +116,7 @@ class SdkMeterSuite extends CatsEffectSuite {
       counter <- meter.upDownCounter[Long]("counter").create
       _ <- counter.add(3L)
       metrics <- sdk.collectMetrics
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("UpDownCounter - increment") { sdk =>
@@ -124,7 +127,7 @@ class SdkMeterSuite extends CatsEffectSuite {
       counter <- meter.upDownCounter[Long]("counter").create
       _ <- counter.inc()
       metrics <- sdk.collectMetrics
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("UpDownCounter - decrement") { sdk =>
@@ -135,7 +138,7 @@ class SdkMeterSuite extends CatsEffectSuite {
       counter <- meter.upDownCounter[Long]("counter").create
       _ <- counter.dec()
       metrics <- sdk.collectMetrics
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("Histogram - allow only non-negative values") { sdk =>
@@ -144,7 +147,7 @@ class SdkMeterSuite extends CatsEffectSuite {
       histogram <- meter.histogram[Double]("histogram").create
       _ <- histogram.record(-1.0)
       metrics <- sdk.collectMetrics
-    } yield assertEquals(metrics, Nil)
+    } yield assertMetricsMatch(metrics, Nil)
   }
 
   sdkTest("Histogram - record values") { sdk =>
@@ -160,7 +163,7 @@ class SdkMeterSuite extends CatsEffectSuite {
       histogram <- meter.histogram[Double]("histogram").create
       _ <- values.traverse(value => histogram.record(value))
       metrics <- sdk.collectMetrics
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("Histogram - record duration") { sdk =>
@@ -178,7 +181,7 @@ class SdkMeterSuite extends CatsEffectSuite {
           .recordDuration(TimeUnit.NANOSECONDS)
           .surround(IO.sleep(duration))
         metrics <- sdk.collectMetrics
-      } yield assertEquals(metrics, List(expected))
+      } yield assertMetricsMatch(metrics, List(expected))
     }
   }
 
@@ -199,7 +202,7 @@ class SdkMeterSuite extends CatsEffectSuite {
         .create
       _ <- histogram.record(1.0)
       metrics <- sdk.collectMetrics
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("ObservableCounter - record values") { sdk =>
@@ -211,7 +214,7 @@ class SdkMeterSuite extends CatsEffectSuite {
         .observableCounter[Long]("counter")
         .createWithCallback(cb => cb.record(1L))
         .surround(sdk.collectMetrics)
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest(
@@ -227,7 +230,7 @@ class SdkMeterSuite extends CatsEffectSuite {
           cb.record(1L) >> cb.record(2L) >> cb.record(3L)
         }
         .surround(sdk.collectMetrics)
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("ObservableUpDownCounter - record values") { sdk =>
@@ -239,7 +242,7 @@ class SdkMeterSuite extends CatsEffectSuite {
         .observableUpDownCounter[Long]("counter")
         .createWithCallback(cb => cb.record(1L))
         .surround(sdk.collectMetrics)
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest(
@@ -255,7 +258,7 @@ class SdkMeterSuite extends CatsEffectSuite {
           cb.record(1L) >> cb.record(2L) >> cb.record(3L) >> cb.record(-4L)
         }
         .surround(sdk.collectMetrics)
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest("ObservableGauge - record values") { sdk =>
@@ -267,7 +270,7 @@ class SdkMeterSuite extends CatsEffectSuite {
         .observableGauge[Long]("gauge")
         .createWithCallback(cb => cb.record(1L))
         .surround(sdk.collectMetrics)
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   sdkTest(
@@ -283,7 +286,7 @@ class SdkMeterSuite extends CatsEffectSuite {
           cb.record(1L) >> cb.record(2L) >> cb.record(3L)
         }
         .surround(sdk.collectMetrics)
-    } yield assertEquals(metrics, List(expected))
+    } yield assertMetricsMatch(metrics, List(expected))
   }
 
   private def sdkTest[A](
@@ -294,6 +297,14 @@ class SdkMeterSuite extends CatsEffectSuite {
     }
     test(options)(TestControl.executeEmbed(io))
   }
+
+  private def assertMetricsMatch(metrics: List[MetricData], expectations: List[MetricExpectation]): Unit =
+    MetricExpectations.checkAllDistinct(metrics, expectations) match {
+      case Right(_) =>
+        ()
+      case Left(mismatches) =>
+        fail(MetricExpectations.format(mismatches))
+    }
 
   private def tracedContext(traceId: String, spanId: String): Context = {
     val spanContext = TraceContext(
@@ -345,112 +356,108 @@ class SdkMeterSuite extends CatsEffectSuite {
       monotonic: Boolean,
       value: Long,
       exemplarValue: Option[Long] = None
-  ): MetricData =
-    MetricData(
-      resource = TelemetryResource.empty,
-      scope = InstrumentationScope.builder("meter").build,
-      name = name,
-      description = None,
-      unit = None,
-      data = MetricPoints.sum(
-        points = NonEmptyVector.one(
-          PointData.longNumber(
-            timeWindow = TimeWindow(Duration.Zero, Duration.Zero),
-            attributes = Attributes.empty,
-            exemplars = exemplarValue.toVector.map { exemplar =>
-              ExemplarData.long(
-                Attributes.empty,
-                Duration.Zero,
-                Some(TraceContext(ByteVector.fromValidHex(TraceId), ByteVector.fromValidHex(SpanId), true)),
-                exemplar
-              )
-            },
-            value = value,
-          )
-        ),
-        monotonic = monotonic,
-        aggregationTemporality = AggregationTemporality.Cumulative
+  ): MetricExpectation =
+    MetricExpectation
+      .sum[Long](name)
+      .scope(InstrumentationScopeExpectation.exact(InstrumentationScope.builder("meter").build))
+      .resource(TelemetryResourceExpectation.exact(TelemetryResource.empty))
+      .monotonic(monotonic)
+      .temporality(AggregationTemporality.Cumulative)
+      .pointCount(1)
+      .containsPoints(
+        numericPointExpectation(value, exemplarValue)
       )
-    )
 
   private def makeGauge(
       name: String,
       value: Long,
       exemplarValue: Option[Long] = None
-  ): MetricData =
-    MetricData(
-      resource = TelemetryResource.empty,
-      scope = InstrumentationScope.builder("meter").build,
-      name = name,
-      description = None,
-      unit = None,
-      data = MetricPoints.gauge(
-        points = NonEmptyVector.one(
-          PointData.longNumber(
-            timeWindow = TimeWindow(Duration.Zero, Duration.Zero),
-            attributes = Attributes.empty,
-            exemplars = exemplarValue.toVector.map { exemplar =>
-              ExemplarData.long(
-                Attributes.empty,
-                Duration.Zero,
-                Some(TraceContext(ByteVector.fromValidHex(TraceId), ByteVector.fromValidHex(SpanId), true)),
-                exemplar
-              )
-            },
-            value = value,
-          )
-        )
+  ): MetricExpectation =
+    MetricExpectation
+      .gauge[Long](name)
+      .scope(InstrumentationScopeExpectation.exact(InstrumentationScope.builder("meter").build))
+      .resource(TelemetryResourceExpectation.exact(TelemetryResource.empty))
+      .pointCount(1)
+      .containsPoints(
+        numericPointExpectation(value, exemplarValue)
       )
-    )
 
   private def makeHistogram(
       name: String,
       values: List[Double],
       boundaries: BucketBoundaries = DefaultBoundaries,
       exemplarValue: Option[Double] = None
-  ): MetricData = {
-    val counts: Vector[Long] =
-      values.foldLeft(Vector.fill(boundaries.length + 1)(0L)) { case (acc, value) =>
-        val i = boundaries.boundaries.indexWhere(b => value <= b)
-        val idx = if (i == -1) boundaries.length else i
+  ): MetricExpectation =
+    MetricExpectation
+      .histogram(name)
+      .scope(InstrumentationScopeExpectation.exact(InstrumentationScope.builder("meter").build))
+      .resource(TelemetryResourceExpectation.exact(TelemetryResource.empty))
+      .temporality(AggregationTemporality.Cumulative)
+      .pointCount(1)
+      .containsPoints(
+        histogramPointExpectation(values, boundaries, exemplarValue)
+      )
 
-        acc.updated(idx, acc(idx) + 1L)
+  private def numericPointExpectation(
+      value: Long,
+      exemplarValue: Option[Long]
+  ): PointExpectation.Numeric[Long] =
+    PointExpectation
+      .numeric(value)
+      .attributesEmpty
+      .pipe { expectation =>
+        exemplarValue match {
+          case Some(exemplar) =>
+            expectation
+              .exemplarCount(1)
+              .containsExemplars(exemplarExpectation(exemplar))
+
+          case None =>
+            expectation.exemplarCount(0)
+        }
       }
 
-    MetricData(
-      resource = TelemetryResource.empty,
-      scope = InstrumentationScope.builder("meter").build,
-      name = name,
-      description = None,
-      unit = None,
-      data = MetricPoints.histogram(
-        points = NonEmptyVector.one(
-          PointData.histogram(
-            timeWindow = TimeWindow(Duration.Zero, Duration.Zero),
-            attributes = Attributes.empty,
-            exemplars = exemplarValue.toVector.map { exemplar =>
-              ExemplarData.double(
-                Attributes.empty,
-                Duration.Zero,
-                Some(TraceContext(ByteVector.fromValidHex(TraceId), ByteVector.fromValidHex(SpanId), true)),
-                exemplar
-              )
-            },
-            stats = Some(
-              PointData.Histogram.Stats(
-                values.sum,
-                values.min,
-                values.max,
-                values.size.toLong,
-              )
-            ),
-            boundaries = boundaries,
-            counts = counts,
-          )
-        ),
-        aggregationTemporality = AggregationTemporality.Cumulative
-      ),
-    )
-  }
+  private def histogramPointExpectation(
+      values: List[Double],
+      boundaries: BucketBoundaries,
+      exemplarValue: Option[Double]
+  ): PointExpectation.Histogram =
+    PointExpectation.histogram
+      .sum(values.sum)
+      .count(values.size.toLong)
+      .min(values.min)
+      .max(values.max)
+      .boundaries(boundaries)
+      .counts(histogramCounts(values, boundaries).toList)
+      .attributesEmpty
+      .pipe { expectation =>
+        exemplarValue match {
+          case Some(exemplar) =>
+            expectation.exemplarCount(1).containsExemplars(exemplarExpectation(exemplar))
+          case None =>
+            expectation.exemplarCount(0)
+        }
+      }
+
+  private def exemplarExpectation[A: MeasurementValue: NumberComparison](value: A): ExemplarExpectation[A] =
+    ExemplarExpectation
+      .numeric(value)
+      .filteredAttributesEmpty
+      .timestamp(Duration.Zero)
+      .traceContext(
+        TraceContext(
+          ByteVector.fromValidHex(TraceId),
+          ByteVector.fromValidHex(SpanId),
+          sampled = true
+        )
+      )
+
+  private def histogramCounts(values: List[Double], boundaries: BucketBoundaries): Vector[Long] =
+    values.foldLeft(Vector.fill(boundaries.length + 1)(0L)) { case (acc, value) =>
+      val i = boundaries.boundaries.indexWhere(b => value <= b)
+      val idx = if (i == -1) boundaries.length else i
+
+      acc.updated(idx, acc(idx) + 1L)
+    }
 
 }
