@@ -60,7 +60,7 @@ sealed trait ExemplarExpectation[A] {
   def traceContext(traceContext: TraceContext): ExemplarExpectation[A]
 
   /** Expects the exemplar to have no trace context. */
-  def traceContextAbsent: ExemplarExpectation[A]
+  def withoutTraceContext: ExemplarExpectation[A]
 
   /** Adds a clue that can be surfaced when the expectation fails. */
   def clue(text: String): ExemplarExpectation[A]
@@ -237,7 +237,7 @@ object ExemplarExpectation {
       copy(expectedTimestamp = Some(timestamp))
     def traceContext(traceContext: TraceContext): ExemplarExpectation[A] =
       copy(expectedTraceContext = Some(Some(traceContext)))
-    def traceContextAbsent: ExemplarExpectation[A] =
+    def withoutTraceContext: ExemplarExpectation[A] =
       copy(expectedTraceContext = Some(None))
     def clue(text: String): ExemplarExpectation[A] = copy(clue = Some(text))
     def where(f: ExemplarData.Aux[A] => Boolean): ExemplarExpectation[A] =

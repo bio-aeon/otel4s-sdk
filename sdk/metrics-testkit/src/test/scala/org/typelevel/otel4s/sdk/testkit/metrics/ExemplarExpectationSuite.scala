@@ -100,7 +100,7 @@ class ExemplarExpectationSuite extends FunSuite {
       ExemplarExpectation
         .numeric(42L)
         .timestamp(5.seconds)
-        .traceContextAbsent
+        .withoutTraceContext
 
     val exemplar = ExemplarData.long(
       filteredAttributes = Attributes.empty,
