@@ -117,6 +117,7 @@ lazy val munitDependencies = Def.settings(
 lazy val root = tlCrossRootProject
   .aggregate(
     `sdk-common`,
+    `sdk-common-testkit`,
     `sdk-logs`,
     `sdk-logs-testkit`,
     `sdk-metrics`,
@@ -169,6 +170,18 @@ lazy val `sdk-common` = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     buildInfoKeys := Seq[BuildInfoKey](
       version
     )
+  )
+  .settings(munitDependencies)
+  .jsSettings(scalaJSLinkerSettings)
+
+lazy val `sdk-common-testkit` = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
+  .in(file("sdk/common-testkit"))
+  .dependsOn(`sdk-common`)
+  .settings(artifactUploadSettings)
+  .settings(
+    name := "otel4s-sdk-common-testkit",
+    startYear := Some(2026)
   )
   .settings(munitDependencies)
   .jsSettings(scalaJSLinkerSettings)
@@ -235,12 +248,14 @@ lazy val `sdk-metrics-testkit` =
   crossProject(JVMPlatform, JSPlatform, NativePlatform)
     .crossType(CrossType.Pure)
     .in(file("sdk/metrics-testkit"))
-    .dependsOn(`sdk-metrics`)
+    .dependsOn(`sdk-common-testkit`, `sdk-metrics`)
     .settings(artifactUploadSettings)
     .settings(
       name := "otel4s-sdk-metrics-testkit",
       startYear := Some(2024)
     )
+    .settings(munitDependencies)
+    .jsSettings(scalaJSLinkerSettings)
 
 lazy val `sdk-trace` = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -702,6 +717,7 @@ lazy val unidocs = project
     name := "otel4s-sdk-docs",
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(
       `sdk-common`.jvm,
+      `sdk-common-testkit`.jvm,
       `sdk-logs`.jvm,
       `sdk-logs-testkit`.jvm,
       `sdk-metrics`.jvm,
