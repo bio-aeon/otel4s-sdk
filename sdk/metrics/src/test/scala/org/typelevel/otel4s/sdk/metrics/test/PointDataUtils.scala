@@ -53,6 +53,62 @@ object PointDataUtils {
         }
     }
 
+  def toExponentialHistogramPoint[A](
+      values: NonEmptyVector[A],
+      attributes: Attributes,
+      timeWindow: TimeWindow,
+      scale: Int
+  )(implicit N: Numeric[A]): PointData.ExponentialHistogram = {
+    import N.mkNumericOps
+
+    val doubleValues = values.toVector.map(_.toDouble)
+
+    val stats: Option[PointData.ExponentialHistogram.Stats] =
+      Some(
+        PointData.ExponentialHistogram.Stats(
+          sum = doubleValues.sum,
+          min = doubleValues.min,
+          max = doubleValues.max,
+          count = doubleValues.size.toLong
+        )
+      )
+
+    val positiveValues = doubleValues.filter(_ > 0.0)
+    val negativeValues = doubleValues.filter(_ < 0.0)
+    val zeroCount = doubleValues.count(_ == 0.0).toLong
+
+    def computeIndex(value: Double): Int = {
+      val scaleFactor = math.scalb(1.0 / math.log(2), scale)
+      math.ceil(math.log(value) * scaleFactor).toInt - 1
+    }
+
+    def toBuckets(absValues: Vector[Double]): PointData.ExponentialHistogram.Buckets =
+      if (absValues.isEmpty) {
+        PointData.ExponentialHistogram.Buckets.empty
+      } else {
+        val indices = absValues.map(v => computeIndex(v))
+        val minIdx = indices.min
+        val maxIdx = indices.max
+        val counts = indices.foldLeft(Vector.fill(maxIdx - minIdx + 1)(0L)) { (acc, idx) =>
+          val pos = idx - minIdx
+          acc.updated(pos, acc(pos) + 1L)
+        }
+        PointData.ExponentialHistogram.Buckets(minIdx, counts)
+      }
+
+    PointData.exponentialHistogram(
+      timeWindow,
+      attributes,
+      Vector.empty,
+      stats,
+      scale,
+      zeroCount,
+      0.0,
+      toBuckets(positiveValues),
+      toBuckets(negativeValues.map(v => math.abs(v)))
+    )
+  }
+
   def toHistogramPoint[A](
       values: NonEmptyVector[A],
       attributes: Attributes,

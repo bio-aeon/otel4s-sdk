@@ -777,5 +777,7 @@ object MetricExpectation {
         else "Sum[Double]"
       case _: MetricPoints.Histogram =>
         "Histogram"
+      case _: MetricPoints.ExponentialHistogram =>
+        "ExponentialHistogram"
     }
 }

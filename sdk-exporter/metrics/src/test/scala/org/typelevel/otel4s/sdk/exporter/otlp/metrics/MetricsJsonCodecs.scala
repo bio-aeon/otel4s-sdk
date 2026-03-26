@@ -101,6 +101,41 @@ private object MetricsJsonCodecs extends JsonCodecs {
         .dropEmptyValues
     }
 
+  implicit val exponentialHistogramBucketsJsonEncoder: Encoder[PointData.ExponentialHistogram.Buckets] =
+    Encoder.instance { buckets =>
+      Json
+        .obj(
+          "offset" := Option.when(buckets.offset != 0)(buckets.offset),
+          "bucketCounts" := buckets.counts.map(_.toString)
+        )
+        .dropNullValues
+        .dropEmptyValues
+    }
+
+  implicit val exponentialHistogramPointDataJsonEncoder: Encoder[PointData.ExponentialHistogram] =
+    Encoder.instance { exponentialHistogram =>
+      Json
+        .obj(
+          "attributes" := exponentialHistogram.attributes,
+          "startTimeUnixNano" := exponentialHistogram.timeWindow.start.toNanos.toString,
+          "timeUnixNano" := exponentialHistogram.timeWindow.end.toNanos.toString,
+          "count" := exponentialHistogram.stats.map(_.count.toString),
+          "sum" := exponentialHistogram.stats.map(_.sum),
+          "min" := exponentialHistogram.stats.flatMap(_.min),
+          "max" := exponentialHistogram.stats.flatMap(_.max),
+          "scale" := Option.when(exponentialHistogram.scale != 0)(exponentialHistogram.scale),
+          "zeroCount" := Option.when(exponentialHistogram.zeroCount != 0L)(exponentialHistogram.zeroCount.toString),
+          "zeroThreshold" := Option.when(exponentialHistogram.zeroThreshold != 0.0)(
+            exponentialHistogram.zeroThreshold
+          ),
+          "positive" := exponentialHistogram.positiveBuckets,
+          "negative" := exponentialHistogram.negativeBuckets,
+          "exemplars" := (exponentialHistogram.exemplars: Vector[ExemplarData])
+        )
+        .dropNullValues
+        .dropEmptyValues
+    }
+
   implicit val sumMetricPointsJsonEncoder: Encoder[MetricPoints.Sum] =
     Encoder.instance { sum =>
       val monotonic =
@@ -135,6 +170,16 @@ private object MetricsJsonCodecs extends JsonCodecs {
         .dropEmptyValues
     }
 
+  implicit val exponentialHistogramMetricPointsJsonEncoder: Encoder[MetricPoints.ExponentialHistogram] =
+    Encoder.instance { exponentialHistogram =>
+      Json
+        .obj(
+          "dataPoints" := exponentialHistogram.points,
+          "aggregationTemporality" := exponentialHistogram.aggregationTemporality
+        )
+        .dropEmptyValues
+    }
+
   implicit val metricPointsJsonEncoder: Encoder[MetricPoints] =
     Encoder.instance {
       case sum: MetricPoints.Sum =>
@@ -145,6 +190,9 @@ private object MetricsJsonCodecs extends JsonCodecs {
 
       case histogram: MetricPoints.Histogram =>
         Json.obj("histogram" := histogram)
+
+      case exponentialHistogram: MetricPoints.ExponentialHistogram =>
+        Json.obj("exponentialHistogram" := exponentialHistogram)
     }
 
   implicit val metricDataJsonEncoder: Encoder[MetricData] =

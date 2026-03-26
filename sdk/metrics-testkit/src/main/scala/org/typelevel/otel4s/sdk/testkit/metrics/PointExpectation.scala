@@ -675,9 +675,10 @@ object PointExpectation {
 
   private def pointTypeName(point: PointData): String =
     point match {
-      case _: PointData.LongNumber   => "LongNumber"
-      case _: PointData.DoubleNumber => "DoubleNumber"
-      case _: PointData.Histogram    => "Histogram"
+      case _: PointData.LongNumber           => "LongNumber"
+      case _: PointData.DoubleNumber         => "DoubleNumber"
+      case _: PointData.Histogram            => "Histogram"
+      case _: PointData.ExponentialHistogram => "ExponentialHistogram"
     }
 
   private def checkExemplarExpectations[A](

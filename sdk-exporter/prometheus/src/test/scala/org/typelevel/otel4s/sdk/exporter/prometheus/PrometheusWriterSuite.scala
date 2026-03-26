@@ -209,6 +209,47 @@ class PrometheusWriterSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
     writeAndCompare(metrics, expected)
   }
 
+  test("write MetricData with MetricPoints.ExponentialHistogram") {
+    val expected =
+      s"""# HELP exponential_histogram_foo a nice exponential histogram
+         |# TYPE exponential_histogram_foo histogram
+         |exponential_histogram_foo_bucket{A="B",otel_scope_name="testmeter",otel_scope_version="v0.1.0",le="0"} 1
+         |exponential_histogram_foo_bucket{A="B",otel_scope_name="testmeter",otel_scope_version="v0.1.0",le="2"} 4
+         |exponential_histogram_foo_bucket{A="B",otel_scope_name="testmeter",otel_scope_version="v0.1.0",le="4"} 5
+         |exponential_histogram_foo_bucket{A="B",otel_scope_name="testmeter",otel_scope_version="v0.1.0",le="+Inf"} 5
+         |exponential_histogram_foo_count{A="B",otel_scope_name="testmeter",otel_scope_version="v0.1.0"} 5
+         |exponential_histogram_foo_sum{A="B",otel_scope_name="testmeter",otel_scope_version="v0.1.0"} 10.5
+         |# HELP otel_scope_info Instrumentation Scope metadata
+         |# TYPE otel_scope_info gauge
+         |otel_scope_info{E="F",otel_scope_name="testmeter",otel_scope_version="v0.1.0"} 1
+         |# HELP target_info Target metadata
+         |# TYPE target_info gauge
+         |target_info{service_name="unknown_service:scala",telemetry_sdk_language="scala",telemetry_sdk_name="otel4s",telemetry_sdk_version="${BuildInfo.version}"} 1
+         |""".stripMargin
+
+    // scale=0, base=2: bucket index i covers (2^i, 2^(i+1)]
+    // positive buckets: offset=0, counts=[3, 1] → upper boundaries 2.0, 4.0
+    val metrics = Vector(
+      mkExponentialHistogram(
+        "exponential_histogram_foo",
+        "a nice exponential histogram".some,
+        none,
+        NonEmptyVector.of(
+          (
+            PointData.ExponentialHistogram.Stats(sum = 10.5, min = 0.0, max = 3.5, count = 5L),
+            0,
+            1L,
+            PointData.ExponentialHistogram.Buckets(0, Vector(3L, 1L)),
+            PointData.ExponentialHistogram.Buckets.empty,
+            Attributes(Attribute("A", "B"))
+          )
+        )
+      )
+    )
+
+    writeAndCompare(metrics, expected)
+  }
+
   test("merge or overwrite label values after keys conversion") {
     val expected =
       s"""# HELP foo_total a sanitary counter
@@ -1101,6 +1142,55 @@ class PrometheusWriterSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
             stats.some,
             BucketBoundaries(boundaries),
             counts
+          )
+        },
+        temporality
+      )
+    )
+  }
+
+  private def mkExponentialHistogram(
+      metricName: String,
+      metricDescription: Option[String],
+      metricUnit: Option[String],
+      points: NonEmptyVector[
+        (
+            PointData.ExponentialHistogram.Stats,
+            Int,
+            Long,
+            PointData.ExponentialHistogram.Buckets,
+            PointData.ExponentialHistogram.Buckets,
+            Attributes
+        )
+      ],
+      resource: TelemetryResource = TelemetryResource.default,
+      scopeName: String = "testmeter",
+      scopeVersion: String = "v0.1.0",
+      scopeAttributes: Attributes = Attributes(Attribute("E", "F")),
+      temporality: AggregationTemporality = AggregationTemporality.Cumulative
+  ) = {
+    MetricData(
+      resource,
+      InstrumentationScope
+        .builder(scopeName)
+        .withVersion(scopeVersion)
+        .withAttributes(scopeAttributes)
+        .build,
+      metricName,
+      metricDescription,
+      metricUnit,
+      MetricPoints.exponentialHistogram(
+        points.map { case (stats, scale, zeroCount, positiveBuckets, negativeBuckets, attrs) =>
+          PointData.exponentialHistogram(
+            getTimeWindow,
+            attrs,
+            Vector.empty,
+            stats.some,
+            scale,
+            zeroCount,
+            0.0,
+            positiveBuckets,
+            negativeBuckets
           )
         },
         temporality

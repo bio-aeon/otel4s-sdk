@@ -46,6 +46,10 @@ object Aggregation {
     val Boundaries: BucketBoundaries = BucketBoundaries(
       0d, 5d, 10d, 25d, 50d, 75d, 100d, 250d, 500d, 750d, 1000d, 2500d, 5000d, 7500d, 10000d
     )
+
+    // See https://opentelemetry.io/docs/specs/otel/metrics/sdk/#base2-exponential-bucket-histogram-aggregation
+    val ExponentialMaxBuckets: Int = 160
+    val ExponentialMaxScale: Int = 20
   }
 
   /** Drops all measurements and doesn't export any metric.
@@ -127,6 +131,34 @@ object Aggregation {
       options.recordMinMax
     )
 
+  /** Aggregates measurements into an
+    * [[org.typelevel.otel4s.sdk.metrics.data.MetricPoints.ExponentialHistogram MetricPoints.ExponentialHistogram]]
+    * using exponential bucket boundaries with default configuration.
+    *
+    * Compatible instruments:
+    *   - [[org.typelevel.otel4s.metrics.Counter Counter]]
+    *   - [[org.typelevel.otel4s.metrics.Histogram Histogram]]
+    *
+    * @see
+    *   [[https://opentelemetry.io/docs/specs/otel/metrics/sdk/#base2-exponential-bucket-histogram-aggregation]]
+    */
+  def base2ExponentialHistogram: Aggregation =
+    base2ExponentialHistogram(Base2ExponentialHistogramOptions.default)
+
+  /** Aggregates measurements into an
+    * [[org.typelevel.otel4s.sdk.metrics.data.MetricPoints.ExponentialHistogram MetricPoints.ExponentialHistogram]]
+    * using exponential bucket boundaries with the given options.
+    *
+    * Compatible instruments:
+    *   - [[org.typelevel.otel4s.metrics.Counter Counter]]
+    *   - [[org.typelevel.otel4s.metrics.Histogram Histogram]]
+    *
+    * @param options
+    *   the base2 exponential histogram options to use
+    */
+  def base2ExponentialHistogram(options: Base2ExponentialHistogramOptions): Aggregation =
+    Base2ExponentialHistogram(options.maxBuckets, options.maxScale, options.recordMinMax)
+
   implicit val aggregationHash: Hash[Aggregation] =
     Hash.fromUniversalHashCode
 
@@ -138,6 +170,8 @@ object Aggregation {
       case LastValue                                         => "Aggregation.LastValue"
       case ExplicitBucketHistogram(boundaries, recordMinMax) =>
         show"Aggregation.ExplicitBucketHistogram{boundaries=$boundaries, recordMinMax=$recordMinMax}"
+      case Base2ExponentialHistogram(maxBuckets, maxScale, recordMinMax) =>
+        s"Aggregation.Base2ExponentialHistogram{maxBuckets=$maxBuckets, maxScale=$maxScale, recordMinMax=$recordMinMax}"
     }
 
   private[metrics] sealed trait Synchronous { self: Aggregation => }
@@ -155,6 +189,13 @@ object Aggregation {
       boundaries: BucketBoundaries,
       recordMinMax: Boolean
   ) extends Aggregation(Compatability.ExplicitBucketHistogram)
+      with Synchronous
+
+  private[metrics] final case class Base2ExponentialHistogram(
+      maxBuckets: Int,
+      maxScale: Int,
+      recordMinMax: Boolean
+  ) extends Aggregation(Compatability.Base2ExponentialHistogram)
       with Synchronous
 
   private object Compatability {
@@ -176,6 +217,9 @@ object Aggregation {
       Set(InstrumentType.Gauge, InstrumentType.ObservableGauge)
 
     val ExplicitBucketHistogram: Set[InstrumentType] =
+      Set(InstrumentType.Counter, InstrumentType.Histogram)
+
+    val Base2ExponentialHistogram: Set[InstrumentType] =
       Set(InstrumentType.Counter, InstrumentType.Histogram)
   }
 

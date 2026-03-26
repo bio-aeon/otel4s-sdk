@@ -45,6 +45,11 @@ class MetricPointsSuite extends DisciplineSuite {
           "MetricPoints.Histogram{" +
             s"points=${histogram.points.toVector.mkString("{", ",", "}")}, " +
             s"aggregationTemporality=${histogram.aggregationTemporality}}"
+
+        case exponentialHistogram: MetricPoints.ExponentialHistogram =>
+          "MetricPoints.ExponentialHistogram{" +
+            s"points=${exponentialHistogram.points.toVector.mkString("{", ",", "}")}, " +
+            s"aggregationTemporality=${exponentialHistogram.aggregationTemporality}}"
       }
 
       assertEquals(Show[MetricPoints].show(data), expected)

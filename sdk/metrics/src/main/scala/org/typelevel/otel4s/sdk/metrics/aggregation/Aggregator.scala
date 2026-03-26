@@ -259,6 +259,9 @@ private[metrics] object Aggregator {
 
       case Aggregation.ExplicitBucketHistogram(boundaries, recordMinMax) =>
         histogram(boundaries, recordMinMax)
+
+      case Aggregation.Base2ExponentialHistogram(maxBuckets, maxScale, recordMinMax) =>
+        ExponentialHistogramAggregator(reservoirs, maxBuckets, maxScale, recordMinMax)
     }
   }
 

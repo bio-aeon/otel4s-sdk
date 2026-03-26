@@ -54,6 +54,18 @@ class PointDataSuite extends DisciplineSuite {
             s"stats=${data.stats}, " +
             s"boundaries=${data.boundaries}, " +
             s"counts=${data.counts}}"
+
+        case data: PointData.ExponentialHistogram =>
+          "PointData.ExponentialHistogram{" +
+            s"timeWindow=${data.timeWindow}, " +
+            s"attributes=${data.attributes}, " +
+            s"exemplars=${data.exemplars}, " +
+            s"stats=${data.stats}, " +
+            s"scale=${data.scale}, " +
+            s"zeroCount=${data.zeroCount}, " +
+            s"zeroThreshold=${data.zeroThreshold}, " +
+            s"positiveBuckets=${data.positiveBuckets}, " +
+            s"negativeBuckets=${data.negativeBuckets}}"
       }
 
       assertEquals(Show[PointData].show(pointData), expected)
