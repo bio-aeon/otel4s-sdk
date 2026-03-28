@@ -88,7 +88,7 @@ class PointSetExpectationSuite extends CatsEffectSuite {
 
   test("forall fails on an empty point set") {
     val result = PointSetExpectation.forall(PointExpectation.numeric(1L)).check(Nil)
-    assertMismatchType[PointSetExpectation.Mismatch.NoPointsCollected](result)
+    assertMismatchType[PointSetExpectation.Mismatch.NoPointsCollected.type](result)
   }
 
   testkitTest("contains enforces distinct matching for duplicate expectations") { testkit =>
@@ -163,7 +163,7 @@ class PointSetExpectationSuite extends CatsEffectSuite {
           .and(PointSetExpectation.none(PointExpectation.numeric(1L).attributesSubset(Attribute("region", "eu"))))
           .check(points)
       )
-      assertEquals(andMismatch.operator, PointSetExpectation.LogicalOperator.And)
+      assertEquals(andMismatch.operator, PointSetExpectation.Mismatch.LogicalOperator.And)
 
       assertSuccess(
         PointSetExpectation

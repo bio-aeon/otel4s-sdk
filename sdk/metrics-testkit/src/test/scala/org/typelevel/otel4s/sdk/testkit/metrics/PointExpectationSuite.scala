@@ -25,6 +25,7 @@ import org.typelevel.otel4s.sdk.context.TraceContext
 import org.typelevel.otel4s.sdk.metrics.data.ExemplarData
 import org.typelevel.otel4s.sdk.metrics.data.PointData
 import org.typelevel.otel4s.sdk.metrics.data.TimeWindow
+import org.typelevel.otel4s.sdk.testkit.AttributesExpectation
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
@@ -59,14 +60,14 @@ class PointExpectationSuite extends FunSuite {
       expectation.check(point),
       Left(
         NonEmptyList.of(
-          PointExpectation.Mismatch.valueMismatch("42", "41"),
-          PointExpectation.Mismatch.attributesMismatch(
+          PointExpectation.Mismatch.ValueMismatch("42", "41"),
+          PointExpectation.Mismatch.AttributesMismatch(
             NonEmptyList.of(
-              org.typelevel.otel4s.sdk.testkit.AttributesExpectation.Mismatch.attributeValueMismatch(
+              AttributesExpectation.Mismatch.AttributeValueMismatch(
                 Attribute("region", "eu"),
                 Attribute("region", "us")
               ),
-              org.typelevel.otel4s.sdk.testkit.AttributesExpectation.Mismatch.unexpectedAttribute(
+              AttributesExpectation.Mismatch.UnexpectedAttribute(
                 Attribute("host", "a")
               )
             )
@@ -81,7 +82,7 @@ class PointExpectationSuite extends FunSuite {
 
     assertEquals(
       PointExpectation.numeric(42L).check(point),
-      Left(NonEmptyList.one(PointExpectation.Mismatch.typeMismatch("LongNumber", "DoubleNumber")))
+      Left(NonEmptyList.one(PointExpectation.Mismatch.TypeMismatch("LongNumber", "DoubleNumber")))
     )
   }
 
@@ -156,12 +157,12 @@ class PointExpectationSuite extends FunSuite {
       expectation.check(point),
       Left(
         NonEmptyList.of(
-          PointExpectation.Mismatch.sumMismatch(6.0, 5.0),
-          PointExpectation.Mismatch.countMismatch(3L, 2L),
-          PointExpectation.Mismatch.minMismatch(Some(1.0), Some(2.0)),
-          PointExpectation.Mismatch.maxMismatch(Some(3.0), Some(4.0)),
-          PointExpectation.Mismatch.boundariesMismatch(BucketBoundaries(1.0, 2.0, 3.0), BucketBoundaries(2.0, 4.0)),
-          PointExpectation.Mismatch.countsMismatch(List(1L, 1L, 1L, 0L), List(2L, 0L, 0L))
+          PointExpectation.Mismatch.SumMismatch(6.0, 5.0),
+          PointExpectation.Mismatch.CountMismatch(3L, 2L),
+          PointExpectation.Mismatch.MinMismatch(Some(1.0), Some(2.0)),
+          PointExpectation.Mismatch.MaxMismatch(Some(3.0), Some(4.0)),
+          PointExpectation.Mismatch.BoundariesMismatch(BucketBoundaries(1.0, 2.0, 3.0), BucketBoundaries(2.0, 4.0)),
+          PointExpectation.Mismatch.CountsMismatch(List(1L, 1L, 1L, 0L), List(2L, 0L, 0L))
         )
       )
     )

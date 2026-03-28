@@ -85,194 +85,58 @@ object MetricExpectation {
 
   object Mismatch {
 
-    /** Indicates that the metric name did not match. */
-    sealed trait NameMismatch extends Mismatch {
-
-      /** The expected metric name. */
-      def expected: String
-
-      /** The actual metric name. */
-      def actual: String
-    }
-
-    /** Indicates that the metric description did not match. */
-    sealed trait DescriptionMismatch extends Mismatch {
-
-      /** The expected metric description. */
-      def expected: String
-
-      /** The actual metric description, or absence of one. */
-      def actual: Option[String]
-    }
-
-    /** Indicates that the metric unit did not match. */
-    sealed trait UnitMismatch extends Mismatch {
-
-      /** The expected metric unit. */
-      def expected: String
-
-      /** The actual metric unit, or absence of one. */
-      def actual: Option[String]
-    }
-
-    /** Indicates that the metric data type did not match. */
-    sealed trait TypeMismatch extends Mismatch {
-
-      /** The expected metric type name. */
-      def expected: String
-
-      /** The actual metric type name. */
-      def actual: String
-    }
-
-    /** Indicates that the aggregation temporality did not match. */
-    sealed trait AggregationTemporalityMismatch extends Mismatch {
-
-      /** The expected aggregation temporality. */
-      def expected: AggregationTemporality
-
-      /** The actual aggregation temporality, if present for the metric type. */
-      def actual: Option[AggregationTemporality]
-    }
-
-    /** Indicates that the monotonic flag did not match. */
-    sealed trait MonotonicMismatch extends Mismatch {
-
-      /** The expected monotonic flag. */
-      def expected: Boolean
-
-      /** The actual monotonic flag, if present for the metric type. */
-      def actual: Option[Boolean]
-    }
-
-    /** Indicates that the instrumentation scope did not satisfy the nested expectation. */
-    sealed trait ScopeMismatch extends Mismatch {
-
-      /** Nested scope mismatches. */
-      def mismatches: NonEmptyList[InstrumentationScopeExpectation.Mismatch]
-    }
-
-    /** Indicates that the telemetry resource did not satisfy the nested expectation. */
-    sealed trait ResourceMismatch extends Mismatch {
-
-      /** Nested resource mismatches. */
-      def mismatches: NonEmptyList[TelemetryResourceExpectation.Mismatch]
-    }
-
-    /** Indicates that a custom metric predicate returned `false`. */
-    sealed trait PredicateMismatch extends Mismatch {
-
-      /** An optional clue attached to the predicate. */
-      def clue: Option[String]
-    }
-
-    /** Indicates that point-set constraints did not match. */
-    sealed trait PointsMismatch extends Mismatch {
-
-      /** Point-set mismatches. */
-      def mismatches: NonEmptyList[PointSetExpectation.Mismatch]
-
-      /** An optional clue attached to the point-set expectation. */
-      def clue: Option[String]
-    }
-
-    /** Creates a mismatch for an unexpected metric name. */
-    def nameMismatch(expected: String, actual: String): NameMismatch =
-      NameMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for an unexpected metric description. */
-    def descriptionMismatch(expected: String, actual: Option[String]): DescriptionMismatch =
-      DescriptionMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for an unexpected metric unit. */
-    def unitMismatch(expected: String, actual: Option[String]): UnitMismatch =
-      UnitMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for an unexpected metric type. */
-    def typeMismatch(expected: String, actual: String): TypeMismatch =
-      TypeMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for an unexpected aggregation temporality. */
-    def aggregationTemporalityMismatch(
-        expected: AggregationTemporality,
-        actual: Option[AggregationTemporality]
-    ): AggregationTemporalityMismatch =
-      AggregationTemporalityMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for an unexpected monotonic flag. */
-    def monotonicMismatch(expected: Boolean, actual: Option[Boolean]): MonotonicMismatch =
-      MonotonicMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for instrumentation scope data that failed validation. */
-    def scopeMismatch(mismatches: NonEmptyList[InstrumentationScopeExpectation.Mismatch]): ScopeMismatch =
-      ScopeMismatchImpl(mismatches)
-
-    /** Creates a mismatch for telemetry resource data that failed validation. */
-    def resourceMismatch(mismatches: NonEmptyList[TelemetryResourceExpectation.Mismatch]): ResourceMismatch =
-      ResourceMismatchImpl(mismatches)
-
-    /** Creates a mismatch for a failed custom predicate. */
-    def predicateMismatch(clue: Option[String]): PredicateMismatch =
-      PredicateMismatchImpl(clue)
-
-    /** Creates a mismatch for failed point-set expectations. */
-    def pointsMismatch(mismatches: NonEmptyList[PointSetExpectation.Mismatch], clue: Option[String]): PointsMismatch =
-      PointsMismatchImpl(mismatches, clue)
-
-    private final case class NameMismatchImpl(expected: String, actual: String) extends NameMismatch {
+    private[testkit] final case class NameMismatch(expected: String, actual: String) extends Mismatch {
       def message: String = s"name mismatch: expected '$expected', got '$actual'"
     }
 
-    private final case class DescriptionMismatchImpl(expected: String, actual: Option[String])
-        extends DescriptionMismatch {
+    private[testkit] final case class DescriptionMismatch(expected: String, actual: Option[String]) extends Mismatch {
       def message: String =
         s"description mismatch: expected '$expected', got ${actual.fold("<missing>")(v => s"'$v'")}"
     }
 
-    private final case class UnitMismatchImpl(expected: String, actual: Option[String]) extends UnitMismatch {
+    private[testkit] final case class UnitMismatch(expected: String, actual: Option[String]) extends Mismatch {
       def message: String =
         s"unit mismatch: expected '$expected', got ${actual.fold("<missing>")(v => s"'$v'")}"
     }
 
-    private final case class TypeMismatchImpl(expected: String, actual: String) extends TypeMismatch {
+    private[testkit] final case class TypeMismatch(expected: String, actual: String) extends Mismatch {
       def message: String = s"type mismatch: expected '$expected', got '$actual'"
     }
 
-    private final case class AggregationTemporalityMismatchImpl(
+    private[testkit] final case class AggregationTemporalityMismatch(
         expected: AggregationTemporality,
         actual: Option[AggregationTemporality]
-    ) extends AggregationTemporalityMismatch {
+    ) extends Mismatch {
       def message: String =
         s"aggregation temporality mismatch: expected '$expected', got ${actual.fold("<missing>")(v => s"'$v'")}"
     }
 
-    private final case class MonotonicMismatchImpl(expected: Boolean, actual: Option[Boolean])
-        extends MonotonicMismatch {
+    private[testkit] final case class MonotonicMismatch(expected: Boolean, actual: Option[Boolean]) extends Mismatch {
       def message: String =
         s"monotonic mismatch: expected '$expected', got ${actual.fold("<missing>")(v => s"'$v'")}"
     }
 
-    private final case class ScopeMismatchImpl(mismatches: NonEmptyList[InstrumentationScopeExpectation.Mismatch])
-        extends ScopeMismatch {
+    private[testkit] final case class ScopeMismatch(mismatches: NonEmptyList[InstrumentationScopeExpectation.Mismatch])
+        extends Mismatch {
       def message: String =
         s"scope mismatch: ${mismatches.toList.map(_.message).mkString(", ")}"
     }
 
-    private final case class ResourceMismatchImpl(mismatches: NonEmptyList[TelemetryResourceExpectation.Mismatch])
-        extends ResourceMismatch {
+    private[testkit] final case class ResourceMismatch(mismatches: NonEmptyList[TelemetryResourceExpectation.Mismatch])
+        extends Mismatch {
       def message: String =
         s"resource mismatch: ${mismatches.toList.map(_.message).mkString(", ")}"
     }
 
-    private final case class PredicateMismatchImpl(clue: Option[String]) extends PredicateMismatch {
+    private[testkit] final case class PredicateMismatch(clue: Option[String]) extends Mismatch {
       def message: String =
         s"predicate mismatch${clue.fold("")(value => s": $value")}"
     }
 
-    private final case class PointsMismatchImpl(
+    private[testkit] final case class PointsMismatch(
         mismatches: NonEmptyList[PointSetExpectation.Mismatch],
         clue: Option[String]
-    ) extends PointsMismatch {
+    ) extends Mismatch {
       def message: String = {
         val rendered = mismatches.toList.map(_.message).mkString(", ")
         val clueSuffix = clue.fold("")(value => s" [$value]")
@@ -644,21 +508,21 @@ object MetricExpectation {
     ExpectationChecks.combine(
       name.fold(ExpectationChecks.success[Mismatch]) { expected =>
         if (expected == metric.name) ExpectationChecks.success
-        else ExpectationChecks.mismatch(Mismatch.nameMismatch(expected, metric.name))
+        else ExpectationChecks.mismatch(Mismatch.NameMismatch(expected, metric.name))
       },
       description.fold(ExpectationChecks.success[Mismatch]) { expected =>
         if (metric.description.contains(expected)) ExpectationChecks.success
-        else ExpectationChecks.mismatch(Mismatch.descriptionMismatch(expected, metric.description))
+        else ExpectationChecks.mismatch(Mismatch.DescriptionMismatch(expected, metric.description))
       },
       unit.fold(ExpectationChecks.success[Mismatch]) { expected =>
         if (metric.unit.contains(expected)) ExpectationChecks.success
-        else ExpectationChecks.mismatch(Mismatch.unitMismatch(expected, metric.unit))
+        else ExpectationChecks.mismatch(Mismatch.UnitMismatch(expected, metric.unit))
       },
       scope.fold(ExpectationChecks.success[Mismatch]) { expected =>
-        ExpectationChecks.nested(expected.check(metric.instrumentationScope))(Mismatch.scopeMismatch)
+        ExpectationChecks.nested(expected.check(metric.instrumentationScope))(Mismatch.ScopeMismatch(_))
       },
       resource.fold(ExpectationChecks.success[Mismatch]) { expected =>
-        ExpectationChecks.nested(expected.check(metric.resource))(Mismatch.resourceMismatch)
+        ExpectationChecks.nested(expected.check(metric.resource))(Mismatch.ResourceMismatch(_))
       }
     )
 
@@ -668,7 +532,7 @@ object MetricExpectation {
   ): Either[NonEmptyList[Mismatch], Unit] =
     ExpectationChecks.combine(predicates.map { case (predicate, clue) =>
       if (predicate(metric)) ExpectationChecks.success[Mismatch]
-      else ExpectationChecks.mismatch(Mismatch.predicateMismatch(clue))
+      else ExpectationChecks.mismatch(Mismatch.PredicateMismatch(clue))
     })
 
   private def checkNumericType[A](
@@ -678,12 +542,12 @@ object MetricExpectation {
   ): Either[NonEmptyList[Mismatch], Unit] =
     if (kind.matches(metric, valueType)) ExpectationChecks.success
     else
-      ExpectationChecks.mismatch(Mismatch.typeMismatch(kind.expectedTypeName(valueType), actualTypeName(metric.data)))
+      ExpectationChecks.mismatch(Mismatch.TypeMismatch(kind.expectedTypeName(valueType), actualTypeName(metric.data)))
 
   private def checkHistogramType(metric: MetricData): Either[NonEmptyList[Mismatch], Unit] =
     metric.data match {
       case _: MetricPoints.Histogram => ExpectationChecks.success
-      case _ => ExpectationChecks.mismatch(Mismatch.typeMismatch("Histogram", actualTypeName(metric.data)))
+      case _ => ExpectationChecks.mismatch(Mismatch.TypeMismatch("Histogram", actualTypeName(metric.data)))
     }
 
   private def checkNumericAggregation(
@@ -698,21 +562,21 @@ object MetricExpectation {
             if (expected == sum.aggregationTemporality) ExpectationChecks.success
             else
               ExpectationChecks.mismatch(
-                Mismatch.aggregationTemporalityMismatch(expected, Some(sum.aggregationTemporality))
+                Mismatch.AggregationTemporalityMismatch(expected, Some(sum.aggregationTemporality))
               )
           },
           expectedMonotonic.fold(ExpectationChecks.success[Mismatch]) { expected =>
             if (expected == sum.monotonic) ExpectationChecks.success
-            else ExpectationChecks.mismatch(Mismatch.monotonicMismatch(expected, Some(sum.monotonic)))
+            else ExpectationChecks.mismatch(Mismatch.MonotonicMismatch(expected, Some(sum.monotonic)))
           }
         )
       case _: MetricPoints.Gauge =>
         ExpectationChecks.combine(
           expectedTemporality.fold(ExpectationChecks.success[Mismatch]) { expected =>
-            ExpectationChecks.mismatch(Mismatch.aggregationTemporalityMismatch(expected, None))
+            ExpectationChecks.mismatch(Mismatch.AggregationTemporalityMismatch(expected, None))
           },
           expectedMonotonic.fold(ExpectationChecks.success[Mismatch]) { expected =>
-            ExpectationChecks.mismatch(Mismatch.monotonicMismatch(expected, None))
+            ExpectationChecks.mismatch(Mismatch.MonotonicMismatch(expected, None))
           }
         )
       case _ =>
@@ -729,7 +593,7 @@ object MetricExpectation {
           if (expected == histogram.aggregationTemporality) ExpectationChecks.success
           else
             ExpectationChecks.mismatch(
-              Mismatch.aggregationTemporalityMismatch(expected, Some(histogram.aggregationTemporality))
+              Mismatch.AggregationTemporalityMismatch(expected, Some(histogram.aggregationTemporality))
             )
         }
       case _ =>
@@ -742,7 +606,7 @@ object MetricExpectation {
   ): Either[NonEmptyList[Mismatch], Unit] =
     ExpectationChecks.combine(expectations.map { expectation =>
       ExpectationChecks.nested(expectation.check(points))(mismatches =>
-        Mismatch.pointsMismatch(mismatches, expectation.clue)
+        Mismatch.PointsMismatch(mismatches, expectation.clue)
       )
     })
 
