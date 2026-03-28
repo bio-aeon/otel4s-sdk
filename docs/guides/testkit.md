@@ -31,6 +31,14 @@ Add directives to the `*.scala` file:
 
 ## Testing metrics
 
+The testkit provides a dedicated expectation API built on top of the `MetricData`.
+This allows tests to match only the parts that matter: metric name, kind, values, point attributes,
+instrumentation scope, telemetry resource, summaries, histograms, and more.
+
+For the metrics expectation API, see the dedicated [Metrics testkit guide](testkit-metrics.md).
+
+____
+
 Let's assume we have a program that increments a counter by one and sets the gauge's value to 42. 
 Here is how we can test this program:
 
