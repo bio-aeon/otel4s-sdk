@@ -284,11 +284,13 @@ lazy val `sdk-trace-testkit` =
     .crossType(CrossType.Pure)
     .in(file("sdk/trace-testkit"))
     .settings(artifactUploadSettings)
-    .dependsOn(`sdk-trace`)
+    .dependsOn(`sdk-common-testkit`, `sdk-trace`)
     .settings(
       name := "otel4s-sdk-trace-testkit",
       startYear := Some(2024)
     )
+    .settings(munitDependencies)
+    .jsSettings(scalaJSLinkerSettings)
 
 lazy val `sdk-testkit` = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)

@@ -155,7 +155,7 @@ object InstrumentationScopeExpectation {
       copy(attributes = Some(expectation))
 
     def attributesExact(attributes: Attributes): InstrumentationScopeExpectation =
-      this.attributes(AttributesExpectation.exact(attributes))
+      copy(attributes = Some(AttributesExpectation.exact(attributes)))
 
     def attributesExact(attributes: Attribute[_]*): InstrumentationScopeExpectation =
       attributesExact(Attributes(attributes *))
@@ -164,7 +164,7 @@ object InstrumentationScopeExpectation {
       attributesExact(Attributes.empty)
 
     def attributesSubset(attributes: Attributes): InstrumentationScopeExpectation =
-      this.attributes(AttributesExpectation.subset(attributes))
+      copy(attributes = Some(AttributesExpectation.subset(attributes)))
 
     def attributesSubset(attributes: Attribute[_]*): InstrumentationScopeExpectation =
       attributesSubset(Attributes(attributes *))

@@ -109,7 +109,7 @@ object TelemetryResourceExpectation {
       copy(attributes = Some(expectation))
 
     def attributesExact(attributes: Attributes): TelemetryResourceExpectation =
-      this.attributes(AttributesExpectation.exact(attributes))
+      copy(attributes = Some(AttributesExpectation.exact(attributes)))
 
     def attributesExact(attributes: Attribute[_]*): TelemetryResourceExpectation =
       attributesExact(Attributes(attributes *))
@@ -118,7 +118,7 @@ object TelemetryResourceExpectation {
       attributesExact(Attributes.empty)
 
     def attributesSubset(attributes: Attributes): TelemetryResourceExpectation =
-      this.attributes(AttributesExpectation.subset(attributes))
+      copy(attributes = Some(AttributesExpectation.subset(attributes)))
 
     def attributesSubset(attributes: Attribute[_]*): TelemetryResourceExpectation =
       attributesSubset(Attributes(attributes *))
