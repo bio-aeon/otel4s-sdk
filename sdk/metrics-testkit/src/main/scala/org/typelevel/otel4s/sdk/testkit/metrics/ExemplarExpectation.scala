@@ -92,112 +92,32 @@ object ExemplarExpectation {
 
   object Mismatch {
 
-    /** Indicates that the exemplar type did not match the expected numeric kind. */
-    sealed trait TypeMismatch extends Mismatch {
-
-      /** The expected exemplar type name. */
-      def expected: String
-
-      /** The actual exemplar type name. */
-      def actual: String
-    }
-
-    /** Indicates that the exemplar value did not match the expected value. */
-    sealed trait ValueMismatch extends Mismatch {
-
-      /** The expected value rendered for diagnostics. */
-      def expected: String
-
-      /** The actual value rendered for diagnostics. */
-      def actual: String
-    }
-
-    /** Indicates that filtered attributes did not satisfy the nested expectation. */
-    sealed trait FilteredAttributesMismatch extends Mismatch {
-
-      /** Nested attribute mismatches. */
-      def mismatches: NonEmptyList[AttributesExpectation.Mismatch]
-    }
-
-    /** Indicates that the exemplar timestamp did not match. */
-    sealed trait TimestampMismatch extends Mismatch {
-
-      /** The expected timestamp. */
-      def expected: FiniteDuration
-
-      /** The actual timestamp. */
-      def actual: FiniteDuration
-    }
-
-    /** Indicates that the exemplar trace context did not match. */
-    sealed trait TraceContextMismatch extends Mismatch {
-
-      /** The expected trace context, or absence of one. */
-      def expected: Option[TraceContext]
-
-      /** The actual trace context, or absence of one. */
-      def actual: Option[TraceContext]
-    }
-
-    /** Indicates that a custom predicate returned `false`. */
-    sealed trait PredicateMismatch extends Mismatch {
-
-      /** The clue describing the failed predicate. */
-      def clue: String
-    }
-
-    /** Creates a mismatch for an unexpected exemplar type. */
-    def typeMismatch(expected: String, actual: String): TypeMismatch =
-      TypeMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for an unexpected exemplar value. */
-    def valueMismatch(expected: String, actual: String): ValueMismatch =
-      ValueMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for filtered attributes that failed validation. */
-    def filteredAttributesMismatch(
-        mismatches: NonEmptyList[AttributesExpectation.Mismatch]
-    ): FilteredAttributesMismatch =
-      FilteredAttributesMismatchImpl(mismatches)
-
-    /** Creates a mismatch for an unexpected timestamp. */
-    def timestampMismatch(expected: FiniteDuration, actual: FiniteDuration): TimestampMismatch =
-      TimestampMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for an unexpected trace context. */
-    def traceContextMismatch(expected: Option[TraceContext], actual: Option[TraceContext]): TraceContextMismatch =
-      TraceContextMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for a failed custom predicate. */
-    def predicateMismatch(clue: String): PredicateMismatch =
-      PredicateMismatchImpl(clue)
-
-    private final case class TypeMismatchImpl(expected: String, actual: String) extends TypeMismatch {
+    private[testkit] final case class TypeMismatch(expected: String, actual: String) extends Mismatch {
       def message: String = s"type mismatch: expected '$expected', got '$actual'"
     }
 
-    private final case class ValueMismatchImpl(expected: String, actual: String) extends ValueMismatch {
+    private[testkit] final case class ValueMismatch(expected: String, actual: String) extends Mismatch {
       def message: String = s"value mismatch: expected '$expected', got '$actual'"
     }
 
-    private final case class FilteredAttributesMismatchImpl(
+    private[testkit] final case class FilteredAttributesMismatch(
         mismatches: NonEmptyList[AttributesExpectation.Mismatch]
-    ) extends FilteredAttributesMismatch {
+    ) extends Mismatch {
       def message: String =
         s"filtered attributes mismatch: ${mismatches.toList.map(_.message).mkString(", ")}"
     }
 
-    private final case class TimestampMismatchImpl(expected: FiniteDuration, actual: FiniteDuration)
-        extends TimestampMismatch {
+    private[testkit] final case class TimestampMismatch(expected: FiniteDuration, actual: FiniteDuration)
+        extends Mismatch {
       def message: String = s"timestamp mismatch: expected $expected, got $actual"
     }
 
-    private final case class TraceContextMismatchImpl(expected: Option[TraceContext], actual: Option[TraceContext])
-        extends TraceContextMismatch {
+    private[testkit] final case class TraceContextMismatch(expected: Option[TraceContext], actual: Option[TraceContext])
+        extends Mismatch {
       def message: String = s"trace context mismatch: expected $expected, got $actual"
     }
 
-    private final case class PredicateMismatchImpl(clue: String) extends PredicateMismatch {
+    private[testkit] final case class PredicateMismatch(clue: String) extends Mismatch {
       def message: String = s"predicate mismatch: $clue"
     }
   }
@@ -254,25 +174,25 @@ object ExemplarExpectation {
               else {
                 val exp = numberComparison.render(expected)
                 val act = numberComparison.render(typed.value)
-                ExpectationChecks.mismatch(Mismatch.valueMismatch(exp, act))
+                ExpectationChecks.mismatch(Mismatch.ValueMismatch(exp, act))
               }
             },
             filteredAttributesExpectation.fold(ExpectationChecks.success[Mismatch]) { expected =>
-              ExpectationChecks.nested(expected.check(typed.filteredAttributes))(Mismatch.filteredAttributesMismatch)
+              ExpectationChecks.nested(expected.check(typed.filteredAttributes))(Mismatch.FilteredAttributesMismatch(_))
             },
             expectedTimestamp.fold(ExpectationChecks.success[Mismatch]) { expected =>
               if (expected == typed.timestamp) ExpectationChecks.success
-              else ExpectationChecks.mismatch(Mismatch.timestampMismatch(expected, typed.timestamp))
+              else ExpectationChecks.mismatch(Mismatch.TimestampMismatch(expected, typed.timestamp))
             },
             expectedTraceContext.fold(ExpectationChecks.success[Mismatch]) { expected =>
               if (expected == typed.traceContext) ExpectationChecks.success
-              else ExpectationChecks.mismatch(Mismatch.traceContextMismatch(expected, typed.traceContext))
+              else ExpectationChecks.mismatch(Mismatch.TraceContextMismatch(expected, typed.traceContext))
             },
             ExpectationChecks.combine(predicates.map { case (predicate, clue) =>
               if (predicate(typed)) ExpectationChecks.success
               else
                 ExpectationChecks.mismatch(
-                  Mismatch.predicateMismatch(clue.getOrElse("exemplar predicate returned false"))
+                  Mismatch.PredicateMismatch(clue.getOrElse("exemplar predicate returned false"))
                 )
             })
           )
@@ -291,14 +211,14 @@ object ExemplarExpectation {
           case long: ExemplarData.LongExemplar =>
             Right(long.asInstanceOf[ExemplarData.Aux[A]])
           case other =>
-            Left(Mismatch.typeMismatch("LongExemplar", exemplarTypeName(other)))
+            Left(Mismatch.TypeMismatch("LongExemplar", exemplarTypeName(other)))
         }
       case _: DoubleMeasurementValue[_] =>
         exemplar match {
           case double: ExemplarData.DoubleExemplar =>
             Right(double.asInstanceOf[ExemplarData.Aux[A]])
           case other =>
-            Left(Mismatch.typeMismatch("DoubleExemplar", exemplarTypeName(other)))
+            Left(Mismatch.TypeMismatch("DoubleExemplar", exemplarTypeName(other)))
         }
     }
 

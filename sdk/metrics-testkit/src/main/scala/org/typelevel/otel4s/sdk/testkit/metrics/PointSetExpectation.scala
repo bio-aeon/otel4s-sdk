@@ -56,233 +56,74 @@ object PointSetExpectation {
 
   object Mismatch {
 
-    /** Indicates that the total point count did not match exactly. */
-    sealed trait PointCountMismatch extends Mismatch {
-
-      /** The expected number of points. */
-      def expected: Int
-
-      /** The actual number of points. */
-      def actual: Int
+    private[testkit] sealed abstract class LogicalOperator(val render: String) extends Product with Serializable
+    private[testkit] object LogicalOperator {
+      case object And extends LogicalOperator("and")
+      case object Or extends LogicalOperator("or")
     }
 
-    /** Indicates that fewer points were collected than required. */
-    sealed trait MinimumPointCountMismatch extends Mismatch {
-
-      /** The minimum required number of points. */
-      def expectedAtLeast: Int
-
-      /** The actual number of points. */
-      def actual: Int
-    }
-
-    /** Indicates that more points were collected than allowed. */
-    sealed trait MaximumPointCountMismatch extends Mismatch {
-
-      /** The maximum allowed number of points. */
-      def expectedAtMost: Int
-
-      /** The actual number of points. */
-      def actual: Int
-    }
-
-    /** Indicates that the number of matching points did not equal the expected count. */
-    sealed trait MatchedPointCountMismatch extends Mismatch {
-
-      /** The expected number of matching points. */
-      def expected: Int
-
-      /** The actual number of matching points. */
-      def actual: Int
-    }
-
-    /** Indicates that no collected point satisfied an expected point expectation. */
-    sealed trait MissingExpectedPoint extends Mismatch {
-
-      /** An optional clue attached to the missing point expectation. */
-      def clue: Option[String]
-
-      /** The closest mismatches observed while trying to match the point. */
-      def mismatches: NonEmptyList[PointExpectation.Mismatch]
-    }
-
-    /** Indicates that a collected point was not expected. */
-    sealed trait UnexpectedPoint extends Mismatch {
-
-      /** The index of the unexpected point. */
-      def index: Int
-    }
-
-    /** Indicates that a collected point failed a universal expectation. */
-    sealed trait FailingPoint extends Mismatch {
-
-      /** The index of the failing point. */
-      def index: Int
-
-      /** The mismatches reported by the point expectation. */
-      def mismatches: NonEmptyList[PointExpectation.Mismatch]
-    }
-
-    /** Indicates that a point-set predicate returned `false`. */
-    sealed trait PredicateFailed extends Mismatch {
-
-      /** An optional clue attached to the predicate. */
-      def clue: Option[String]
-    }
-
-    /** Indicates that no points were available to evaluate. */
-    sealed trait NoPointsCollected extends Mismatch
-
-    /** Indicates that a composite `and` or `or` expectation failed. */
-    sealed trait CompositeMismatch extends Mismatch {
-
-      /** The logical operator used to combine expectations. */
-      def operator: LogicalOperator
-
-      /** The mismatches produced by the combined expectations. */
-      def mismatches: NonEmptyList[Mismatch]
-    }
-
-    /** Indicates that a mismatch was wrapped with an explicit clue. */
-    sealed trait CluedMismatch extends Mismatch {
-
-      /** The clue attached to the point-set expectation. */
-      def clue: String
-
-      /** The underlying mismatches. */
-      def mismatches: NonEmptyList[Mismatch]
-    }
-
-    /** Creates a mismatch for an unexpected total point count. */
-    def pointCountMismatch(expected: Int, actual: Int): PointCountMismatch =
-      PointCountMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for a point count below the required minimum. */
-    def minimumPointCountMismatch(expectedAtLeast: Int, actual: Int): MinimumPointCountMismatch =
-      MinimumPointCountMismatchImpl(expectedAtLeast, actual)
-
-    /** Creates a mismatch for a point count above the allowed maximum. */
-    def maximumPointCountMismatch(expectedAtMost: Int, actual: Int): MaximumPointCountMismatch =
-      MaximumPointCountMismatchImpl(expectedAtMost, actual)
-
-    /** Creates a mismatch for an unexpected number of matching points. */
-    def matchedPointCountMismatch(expected: Int, actual: Int): MatchedPointCountMismatch =
-      MatchedPointCountMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for a missing expected point. */
-    def missingExpectedPoint(
-        clue: Option[String],
-        mismatches: NonEmptyList[PointExpectation.Mismatch]
-    ): MissingExpectedPoint =
-      MissingExpectedPointImpl(clue, mismatches)
-
-    /** Creates a mismatch for an unexpected collected point. */
-    def unexpectedPoint(index: Int): UnexpectedPoint =
-      UnexpectedPointImpl(index)
-
-    /** Creates a mismatch for a collected point that failed validation. */
-    def failingPoint(index: Int, mismatches: NonEmptyList[PointExpectation.Mismatch]): FailingPoint =
-      FailingPointImpl(index, mismatches)
-
-    /** Creates a mismatch for a failed custom predicate. */
-    def predicateFailed(clue: Option[String]): PredicateFailed =
-      PredicateFailedImpl(clue)
-
-    /** Creates a mismatch indicating that no points were collected. */
-    def noPointsCollected: NoPointsCollected =
-      NoPointsCollectedImpl
-
-    /** Creates a mismatch for a failed composite expectation. */
-    def compositeMismatch(operator: LogicalOperator, mismatches: NonEmptyList[Mismatch]): CompositeMismatch =
-      CompositeMismatchImpl(operator, mismatches)
-
-    /** Creates a mismatch wrapped with an explicit clue. */
-    def cluedMismatch(clue: String, mismatches: NonEmptyList[Mismatch]): CluedMismatch =
-      CluedMismatchImpl(clue, mismatches)
-
-    private final case class PointCountMismatchImpl(expected: Int, actual: Int) extends PointCountMismatch {
+    private[testkit] final case class PointCountMismatch(expected: Int, actual: Int) extends Mismatch {
       def message: String =
         s"point count mismatch: expected $expected, got $actual"
     }
 
-    private final case class MinimumPointCountMismatchImpl(expectedAtLeast: Int, actual: Int)
-        extends MinimumPointCountMismatch {
+    private[testkit] final case class MinimumPointCountMismatch(expectedAtLeast: Int, actual: Int) extends Mismatch {
       def message: String =
         s"point count mismatch: expected at least $expectedAtLeast, got $actual"
     }
 
-    private final case class MaximumPointCountMismatchImpl(expectedAtMost: Int, actual: Int)
-        extends MaximumPointCountMismatch {
+    private[testkit] final case class MaximumPointCountMismatch(expectedAtMost: Int, actual: Int) extends Mismatch {
       def message: String =
         s"point count mismatch: expected at most $expectedAtMost, got $actual"
     }
 
-    private final case class MatchedPointCountMismatchImpl(expected: Int, actual: Int)
-        extends MatchedPointCountMismatch {
+    private[testkit] final case class MatchedPointCountMismatch(expected: Int, actual: Int) extends Mismatch {
       def message: String =
         s"matched point count mismatch: expected $expected, got $actual"
     }
 
-    private final case class MissingExpectedPointImpl(
+    private[testkit] final case class MissingExpectedPoint(
         clue: Option[String],
         mismatches: NonEmptyList[PointExpectation.Mismatch]
-    ) extends MissingExpectedPoint {
+    ) extends Mismatch {
       def message: String = {
         val prefix = clue.fold("")(value => s" [$value]")
         s"missing expected point$prefix: ${mismatches.toList.map(_.message).mkString(", ")}"
       }
     }
 
-    private final case class UnexpectedPointImpl(index: Int) extends UnexpectedPoint {
+    private[testkit] final case class UnexpectedPoint(index: Int) extends Mismatch {
       def message: String =
         s"unexpected point at index $index"
     }
 
-    private final case class FailingPointImpl(index: Int, mismatches: NonEmptyList[PointExpectation.Mismatch])
-        extends FailingPoint {
+    private[testkit] final case class FailingPoint(index: Int, mismatches: NonEmptyList[PointExpectation.Mismatch])
+        extends Mismatch {
       def message: String =
         s"failing point at index $index: ${mismatches.toList.map(_.message).mkString(", ")}"
     }
 
-    private final case class PredicateFailedImpl(clue: Option[String]) extends PredicateFailed {
+    private[testkit] final case class PredicateFailed(clue: Option[String]) extends Mismatch {
       def message: String =
         s"point set predicate returned false${clue.fold("")(value => s": $value")}"
     }
 
-    private case object NoPointsCollectedImpl extends NoPointsCollected {
+    private[testkit] case object NoPointsCollected extends Mismatch {
       def message: String =
         "no points were collected"
     }
 
-    private final case class CompositeMismatchImpl(operator: LogicalOperator, mismatches: NonEmptyList[Mismatch])
-        extends CompositeMismatch {
+    private[testkit] final case class CompositeMismatch(
+        operator: LogicalOperator,
+        mismatches: NonEmptyList[Mismatch]
+    ) extends Mismatch {
       def message: String =
         s"${operator.render} mismatch: ${mismatches.toList.map(_.message).mkString(", ")}"
     }
 
-    private final case class CluedMismatchImpl(clue: String, mismatches: NonEmptyList[Mismatch]) extends CluedMismatch {
+    private[testkit] final case class CluedMismatch(clue: String, mismatches: NonEmptyList[Mismatch]) extends Mismatch {
       def message: String =
         s"point-set mismatch [$clue]: ${mismatches.toList.map(_.message).mkString(", ")}"
-    }
-  }
-
-  /** Logical operator used when combining point-set expectations. */
-  sealed trait LogicalOperator extends Product with Serializable {
-
-    /** Renders the operator in human-readable mismatch messages. */
-    def render: String
-  }
-
-  object LogicalOperator {
-
-    /** Logical conjunction. */
-    case object And extends LogicalOperator {
-      val render: String = "and"
-    }
-
-    /** Logical disjunction. */
-    case object Or extends LogicalOperator {
-      val render: String = "or"
     }
   }
 
@@ -399,7 +240,7 @@ object PointSetExpectation {
         clue,
         if (points.exists(point => checker.check(this.point, point).isRight)) ExpectationChecks.success
         else {
-          val mismatch = Mismatch.missingExpectedPoint(checker.clue(point), closestMismatch(points, point, checker))
+          val mismatch = Mismatch.MissingExpectedPoint(checker.clue(point), closestMismatch(points, point, checker))
           ExpectationChecks.mismatch(mismatch)
         }
       )
@@ -414,10 +255,10 @@ object PointSetExpectation {
     def check(points: List[P]): Either[NonEmptyList[Mismatch], Unit] =
       withClueContext(
         clue,
-        if (points.isEmpty) ExpectationChecks.mismatch(Mismatch.noPointsCollected)
+        if (points.isEmpty) ExpectationChecks.mismatch(Mismatch.NoPointsCollected)
         else {
           points.zipWithIndex.collectFirst(Function.unlift { case (point, index) =>
-            checker.check(this.point, point).left.toOption.map(Mismatch.failingPoint(index, _))
+            checker.check(this.point, point).left.toOption.map(Mismatch.FailingPoint(index, _))
           }) match {
             case Some(mismatch) => ExpectationChecks.mismatch(mismatch)
             case None           => ExpectationChecks.success
@@ -446,7 +287,7 @@ object PointSetExpectation {
       withClueContext(
         clue,
         containsCheck(expected, checker, points).flatMap { matchedIndices =>
-          val unexpected = points.indices.filterNot(matchedIndices.contains).map(Mismatch.unexpectedPoint).toList
+          val unexpected = points.indices.filterNot(matchedIndices.contains).map(Mismatch.UnexpectedPoint(_)).toList
           NonEmptyList.fromList(unexpected).toLeft(())
         }
       )
@@ -458,7 +299,7 @@ object PointSetExpectation {
       withClueContext(
         clue,
         if (points.length == expected) ExpectationChecks.success
-        else ExpectationChecks.mismatch(Mismatch.pointCountMismatch(expected, points.length))
+        else ExpectationChecks.mismatch(Mismatch.PointCountMismatch(expected, points.length))
       )
   }
 
@@ -468,7 +309,7 @@ object PointSetExpectation {
       withClueContext(
         clue,
         if (points.length >= expectedAtLeast) ExpectationChecks.success
-        else ExpectationChecks.mismatch(Mismatch.minimumPointCountMismatch(expectedAtLeast, points.length))
+        else ExpectationChecks.mismatch(Mismatch.MinimumPointCountMismatch(expectedAtLeast, points.length))
       )
   }
 
@@ -478,7 +319,7 @@ object PointSetExpectation {
       withClueContext(
         clue,
         if (points.length <= expectedAtMost) ExpectationChecks.success
-        else ExpectationChecks.mismatch(Mismatch.maximumPointCountMismatch(expectedAtMost, points.length))
+        else ExpectationChecks.mismatch(Mismatch.MaximumPointCountMismatch(expectedAtMost, points.length))
       )
   }
 
@@ -494,7 +335,7 @@ object PointSetExpectation {
         clue, {
           val actual = points.count(point => checker.check(this.point, point).isRight)
           if (actual == expected) ExpectationChecks.success
-          else ExpectationChecks.mismatch(Mismatch.matchedPointCountMismatch(expected, actual))
+          else ExpectationChecks.mismatch(Mismatch.MatchedPointCountMismatch(expected, actual))
         }
       )
   }
@@ -509,7 +350,7 @@ object PointSetExpectation {
       withClueContext(
         clue,
         points.zipWithIndex.collectFirst(Function.unlift { case (point, index) =>
-          checker.check(this.point, point).toOption.map(_ => Mismatch.unexpectedPoint(index))
+          checker.check(this.point, point).toOption.map(_ => Mismatch.UnexpectedPoint(index))
         }) match {
           case Some(mismatch) => ExpectationChecks.mismatch(mismatch)
           case None           => ExpectationChecks.success
@@ -523,7 +364,7 @@ object PointSetExpectation {
   ) extends PointSetExpectation[P] {
     def clue(text: String): PointSetExpectation[P] = copy(clue = Some(text))
     def check(points: List[P]): Either[NonEmptyList[Mismatch], Unit] =
-      withClueContext(clue, Either.cond(f(points), (), NonEmptyList.one(Mismatch.predicateFailed(clue))))
+      withClueContext(clue, Either.cond(f(points), (), NonEmptyList.one(Mismatch.PredicateFailed(clue))))
   }
 
   private final case class AndImpl[P](
@@ -540,7 +381,7 @@ object PointSetExpectation {
           case (Left(l), Right(_))  => Left(l)
           case (Right(_), Left(r))  => Left(r)
           case (Left(l), Left(r))   =>
-            Left(NonEmptyList.one(Mismatch.compositeMismatch(LogicalOperator.And, l.concatNel(r))))
+            Left(NonEmptyList.one(Mismatch.CompositeMismatch(Mismatch.LogicalOperator.And, l.concatNel(r))))
         }
       )
   }
@@ -557,7 +398,7 @@ object PointSetExpectation {
         (left.check(points), right.check(points)) match {
           case (Right(_), _) | (_, Right(_)) => Right(())
           case (Left(l), Left(r))            =>
-            Left(NonEmptyList.one(Mismatch.compositeMismatch(LogicalOperator.Or, l.concatNel(r))))
+            Left(NonEmptyList.one(Mismatch.CompositeMismatch(Mismatch.LogicalOperator.Or, l.concatNel(r))))
         }
       )
   }
@@ -568,7 +409,7 @@ object PointSetExpectation {
   ): Either[NonEmptyList[Mismatch], Unit] =
     clue match {
       case Some(value) =>
-        result.left.map(mismatches => NonEmptyList.one(Mismatch.cluedMismatch(value, mismatches)))
+        result.left.map(mismatches => NonEmptyList.one(Mismatch.CluedMismatch(value, mismatches)))
       case None =>
         result
     }
@@ -582,7 +423,7 @@ object PointSetExpectation {
       .flatMap(point => checker.check(expectation, point).left.toOption)
       .sortBy(_.length)
       .headOption
-      .getOrElse(NonEmptyList.one(PointExpectation.Mismatch.predicateMismatch("no points were collected")))
+      .getOrElse(NonEmptyList.one(PointExpectation.Mismatch.PredicateMismatch("no points were collected")))
 
   private def containsCheck[E, P](
       expected: NonEmptyList[E],
@@ -598,14 +439,14 @@ object PointSetExpectation {
     if (matching.isComplete) Right(matching.matchedIndices)
     else {
       val missing = expected.toList.zip(candidates).collect { case (expectation, Nil) =>
-        Mismatch.missingExpectedPoint(checker.clue(expectation), closestMismatch(points, expectation, checker))
+        Mismatch.MissingExpectedPoint(checker.clue(expectation), closestMismatch(points, expectation, checker))
       }
 
       Left(
         NonEmptyList
           .fromList(missing)
           .getOrElse(
-            NonEmptyList.one(Mismatch.matchedPointCountMismatch(expected.length, matching.size))
+            NonEmptyList.one(Mismatch.MatchedPointCountMismatch(expected.length, matching.size))
           )
       )
     }

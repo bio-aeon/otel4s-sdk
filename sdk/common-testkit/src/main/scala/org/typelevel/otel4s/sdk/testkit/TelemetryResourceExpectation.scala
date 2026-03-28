@@ -73,33 +73,8 @@ object TelemetryResourceExpectation {
 
   object Mismatch {
 
-    /** Indicates that the resource schema URL did not match. */
-    sealed trait SchemaUrlMismatch extends Mismatch {
-
-      /** The expected schema URL, or absence of one. */
-      def expected: Option[String]
-
-      /** The actual schema URL, or absence of one. */
-      def actual: Option[String]
-    }
-
-    /** Indicates that the resource attributes did not satisfy the nested expectation. */
-    sealed trait AttributesMismatch extends Mismatch {
-
-      /** Nested attribute mismatches. */
-      def mismatches: NonEmptyList[AttributesExpectation.Mismatch]
-    }
-
-    /** Creates a mismatch for an unexpected schema URL. */
-    def schemaUrlMismatch(expected: Option[String], actual: Option[String]): SchemaUrlMismatch =
-      SchemaUrlMismatchImpl(expected, actual)
-
-    /** Creates a mismatch for resource attributes that failed validation. */
-    def attributesMismatch(mismatches: NonEmptyList[AttributesExpectation.Mismatch]): AttributesMismatch =
-      AttributesMismatchImpl(mismatches)
-
-    private final case class SchemaUrlMismatchImpl(expected: Option[String], actual: Option[String])
-        extends SchemaUrlMismatch {
+    private[testkit] final case class SchemaUrlMismatch(expected: Option[String], actual: Option[String])
+        extends Mismatch {
       def message: String = {
         val exp = expected.fold("<missing>")(v => s"'$v'")
         val act = actual.fold("<missing>")(v => s"'$v'")
@@ -107,8 +82,8 @@ object TelemetryResourceExpectation {
       }
     }
 
-    private final case class AttributesMismatchImpl(mismatches: NonEmptyList[AttributesExpectation.Mismatch])
-        extends AttributesMismatch {
+    private[testkit] final case class AttributesMismatch(mismatches: NonEmptyList[AttributesExpectation.Mismatch])
+        extends Mismatch {
       def message: String =
         s"attributes mismatch: ${mismatches.toList.map(_.message).mkString(", ")}"
     }
@@ -157,9 +132,9 @@ object TelemetryResourceExpectation {
     def check(resource: TelemetryResource): Either[NonEmptyList[Mismatch], Unit] =
       ExpectationChecks.combine(
         attributes.fold(ExpectationChecks.success[Mismatch]) { expected =>
-          ExpectationChecks.nested(expected.check(resource.attributes))(Mismatch.attributesMismatch)
+          ExpectationChecks.nested(expected.check(resource.attributes))(Mismatch.AttributesMismatch(_))
         },
-        ExpectationChecks.compareOption(schemaUrl, resource.schemaUrl)(Mismatch.schemaUrlMismatch)
+        ExpectationChecks.compareOption(schemaUrl, resource.schemaUrl)(Mismatch.SchemaUrlMismatch(_, _))
       )
   }
 }

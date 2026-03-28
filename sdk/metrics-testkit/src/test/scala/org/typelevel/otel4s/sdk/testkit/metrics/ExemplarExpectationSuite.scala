@@ -22,6 +22,7 @@ import org.typelevel.otel4s.Attribute
 import org.typelevel.otel4s.Attributes
 import org.typelevel.otel4s.sdk.context.TraceContext
 import org.typelevel.otel4s.sdk.metrics.data.ExemplarData
+import org.typelevel.otel4s.sdk.testkit.AttributesExpectation
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
@@ -67,14 +68,14 @@ class ExemplarExpectationSuite extends FunSuite {
       expectation.check(exemplar),
       Left(
         NonEmptyList.of(
-          ExemplarExpectation.Mismatch.valueMismatch("42", "41"),
-          ExemplarExpectation.Mismatch.filteredAttributesMismatch(
+          ExemplarExpectation.Mismatch.ValueMismatch("42", "41"),
+          ExemplarExpectation.Mismatch.FilteredAttributesMismatch(
             NonEmptyList.of(
-              org.typelevel.otel4s.sdk.testkit.AttributesExpectation.Mismatch.attributeValueMismatch(
+              AttributesExpectation.Mismatch.AttributeValueMismatch(
                 Attribute("region", "eu"),
                 Attribute("region", "us")
               ),
-              org.typelevel.otel4s.sdk.testkit.AttributesExpectation.Mismatch.unexpectedAttribute(
+              AttributesExpectation.Mismatch.UnexpectedAttribute(
                 Attribute("host", "a")
               )
             )
@@ -90,7 +91,7 @@ class ExemplarExpectationSuite extends FunSuite {
 
     assertEquals(
       expectation.check(exemplar),
-      Left(NonEmptyList.one(ExemplarExpectation.Mismatch.typeMismatch("LongExemplar", "DoubleExemplar")))
+      Left(NonEmptyList.one(ExemplarExpectation.Mismatch.TypeMismatch("LongExemplar", "DoubleExemplar")))
     )
     assert(!expectation.matches(exemplar))
   }
@@ -113,8 +114,8 @@ class ExemplarExpectationSuite extends FunSuite {
       expectation.check(exemplar),
       Left(
         NonEmptyList.of(
-          ExemplarExpectation.Mismatch.timestampMismatch(5.seconds, 4.seconds),
-          ExemplarExpectation.Mismatch.traceContextMismatch(None, Some(traceContext))
+          ExemplarExpectation.Mismatch.TimestampMismatch(5.seconds, 4.seconds),
+          ExemplarExpectation.Mismatch.TraceContextMismatch(None, Some(traceContext))
         )
       )
     )
@@ -133,9 +134,9 @@ class ExemplarExpectationSuite extends FunSuite {
       ),
       Left(
         NonEmptyList.one(
-          ExemplarExpectation.Mismatch.filteredAttributesMismatch(
+          ExemplarExpectation.Mismatch.FilteredAttributesMismatch(
             NonEmptyList.one(
-              org.typelevel.otel4s.sdk.testkit.AttributesExpectation.Mismatch.unexpectedAttribute(
+              AttributesExpectation.Mismatch.UnexpectedAttribute(
                 Attribute("region", "eu")
               )
             )
@@ -158,8 +159,8 @@ class ExemplarExpectationSuite extends FunSuite {
       expectation.check(exemplar),
       Left(
         NonEmptyList.of(
-          ExemplarExpectation.Mismatch.predicateMismatch("exemplar predicate returned false"),
-          ExemplarExpectation.Mismatch.predicateMismatch("timestamp must be positive")
+          ExemplarExpectation.Mismatch.PredicateMismatch("exemplar predicate returned false"),
+          ExemplarExpectation.Mismatch.PredicateMismatch("timestamp must be positive")
         )
       )
     )
