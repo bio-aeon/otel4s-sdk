@@ -32,6 +32,8 @@ import org.typelevel.otel4s.sdk.trace.data.SpanData
 import org.typelevel.otel4s.sdk.trace.data.StatusData
 import org.typelevel.otel4s.trace.SpanContext
 import org.typelevel.otel4s.trace.SpanKind
+import org.typelevel.otel4s.trace.TraceFlags
+import org.typelevel.otel4s.trace.TraceState
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
@@ -281,8 +283,8 @@ class SpanExpectationSuite extends FunSuite {
     SpanContext(
       traceId = ByteVector.fromValidHex(traceId),
       spanId = ByteVector.fromValidHex(spanId),
-      traceFlags = org.typelevel.otel4s.trace.TraceFlags.Default,
-      traceState = org.typelevel.otel4s.trace.TraceState.empty,
+      traceFlags = TraceFlags.Default,
+      traceState = TraceState.empty,
       remote = false
     )
 }
