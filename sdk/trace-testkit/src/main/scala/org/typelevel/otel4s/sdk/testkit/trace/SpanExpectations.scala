@@ -53,7 +53,7 @@ object SpanMismatch {
 
   def notFound(expectation: SpanExpectation, availableSpanNames: List[String]): NotFound =
     NotFoundImpl(expectation, availableSpanNames)
-  
+
   def closestMismatch(
       expectation: SpanExpectation,
       span: SpanData,
