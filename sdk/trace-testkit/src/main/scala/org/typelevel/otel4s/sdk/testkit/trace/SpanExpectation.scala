@@ -37,6 +37,7 @@ import scala.concurrent.duration.FiniteDuration
   * accumulate on the same span expectation.
   */
 sealed trait SpanExpectation {
+  private[trace] def expectedName: Option[String]
 
   /** An optional human-readable clue shown in mismatch messages. */
   def clue: Option[String]
@@ -282,6 +283,8 @@ object SpanExpectation {
       clue: Option[String] = None,
       predicates: List[(SpanData => Boolean, Option[String])] = Nil
   ) extends SpanExpectation {
+    private[trace] def expectedName: Option[String] = name
+
     def name(name: String): SpanExpectation = copy(name = Some(name))
     def kind(kind: SpanKind): SpanExpectation = copy(kind = Some(kind))
     def status(expectation: StatusExpectation): SpanExpectation = copy(status = Some(expectation))
