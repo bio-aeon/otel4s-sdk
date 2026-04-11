@@ -17,7 +17,8 @@
 package org.typelevel.otel4s.sdk.testkit.trace
 
 import cats.data.NonEmptyList
-import org.typelevel.otel4s.sdk.testkit.{FlatExpectationMatching, MaximumMatching}
+import org.typelevel.otel4s.sdk.testkit.FlatExpectationMatching
+import org.typelevel.otel4s.sdk.testkit.MaximumMatching
 import org.typelevel.otel4s.sdk.trace.data.SpanData
 
 /** Helpers for matching collected spans against exact trace expectations. */
