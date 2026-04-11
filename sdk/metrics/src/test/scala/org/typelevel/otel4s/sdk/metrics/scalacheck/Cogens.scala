@@ -132,6 +132,42 @@ trait Cogens extends org.typelevel.otel4s.sdk.scalacheck.Cogens {
     }
   }
 
+  implicit val exponentialHistogramBucketsCogen: Cogen[PointData.ExponentialHistogram.Buckets] =
+    Cogen[(Int, Vector[Long])].contramap(b => (b.offset, b.counts))
+
+  implicit val exponentialHistogramPointDataCogen: Cogen[PointData.ExponentialHistogram] = {
+    implicit val statsCogen: Cogen[PointData.ExponentialHistogram.Stats] =
+      Cogen[(Double, Option[Double], Option[Double], Long)].contramap { s =>
+        (s.sum, s.min, s.max, s.count)
+      }
+
+    Cogen[
+      (
+          TimeWindow,
+          Attributes,
+          Vector[ExemplarData],
+          Option[PointData.ExponentialHistogram.Stats],
+          Int,
+          Long,
+          Double,
+          PointData.ExponentialHistogram.Buckets,
+          PointData.ExponentialHistogram.Buckets
+      )
+    ].contramap { h =>
+      (
+        h.timeWindow,
+        h.attributes,
+        h.exemplars: Vector[ExemplarData],
+        h.stats,
+        h.scale,
+        h.zeroCount,
+        h.zeroThreshold,
+        h.positiveBuckets,
+        h.negativeBuckets
+      )
+    }
+  }
+
   implicit val pointDataCogen: Cogen[PointData] =
     Cogen { (seed, pointData) =>
       pointData match {
@@ -139,6 +175,8 @@ trait Cogens extends org.typelevel.otel4s.sdk.scalacheck.Cogens {
           numberPointDataCogen.perturb(seed, point)
         case histogram: PointData.Histogram =>
           histogramPointDataCogen.perturb(seed, histogram)
+        case exponentialHistogram: PointData.ExponentialHistogram =>
+          exponentialHistogramPointDataCogen.perturb(seed, exponentialHistogram)
       }
     }
 
@@ -155,6 +193,11 @@ trait Cogens extends org.typelevel.otel4s.sdk.scalacheck.Cogens {
       (h.points.toVector, h.aggregationTemporality)
     }
 
+  implicit val exponentialHistogramMetricPointsCogen: Cogen[MetricPoints.ExponentialHistogram] =
+    Cogen[(Vector[PointData], AggregationTemporality)].contramap { eh =>
+      (eh.points.toVector, eh.aggregationTemporality)
+    }
+
   implicit val metricPointsCogen: Cogen[MetricPoints] =
     Cogen { (seed, metricPoints) =>
       metricPoints match {
@@ -164,6 +207,8 @@ trait Cogens extends org.typelevel.otel4s.sdk.scalacheck.Cogens {
           gaugeMetricPointsCogen.perturb(seed, gauge)
         case histogram: MetricPoints.Histogram =>
           histogramMetricPointsCogen.perturb(seed, histogram)
+        case exponentialHistogram: MetricPoints.ExponentialHistogram =>
+          exponentialHistogramMetricPointsCogen.perturb(seed, exponentialHistogram)
       }
     }
 

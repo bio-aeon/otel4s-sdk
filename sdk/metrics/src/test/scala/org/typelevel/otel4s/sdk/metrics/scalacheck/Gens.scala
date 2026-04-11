@@ -238,11 +238,102 @@ trait Gens extends org.typelevel.otel4s.sdk.scalacheck.Gens {
     )
   }
 
+  val exponentialHistogramBuckets: Gen[PointData.ExponentialHistogram.Buckets] =
+    for {
+      offset <- Gen.choose(-10, 10)
+      size <- Gen.choose(0, 20)
+      counts <- Gen.containerOfN[Vector, Long](size, Gen.choose(0L, 100L))
+    } yield PointData.ExponentialHistogram.Buckets(offset, counts)
+
+  val exponentialHistogramMaxBuckets: Gen[Int] =
+    Gen.choose(1, Aggregation.Defaults.ExponentialMaxBuckets)
+
+  val exponentialHistogramScale: Gen[Int] =
+    Gen.choose(0, 8)
+
+  val exponentialHistogramPointData: Gen[PointData.ExponentialHistogram] = {
+    // Invariants maintained by this generator:
+    // 1. stats.count == positiveBuckets.totalCount + negativeBuckets.totalCount + zeroCount
+    // 2. stats.sum/min/max are computed from the actual positive, negative, and zero values
+    // 3. exemplar values correspond to actual observed non-zero values
+    // 4. bucket indices are computed from absolute values using the exponential mapping formula
+
+    def stats(values: List[Double]): Gen[Option[PointData.ExponentialHistogram.Stats]] =
+      if (values.nonEmpty)
+        Gen
+          .oneOf(
+            PointData.ExponentialHistogram.Stats(
+              sum = values.sum,
+              min = values.min,
+              max = values.max,
+              count = values.size.toLong
+            ),
+            PointData.ExponentialHistogram.Stats.withoutMinMax(
+              sum = values.sum,
+              count = values.size.toLong
+            )
+          )
+          .map(Some(_))
+      else Gen.const(None)
+
+    // maps a positive double to a bucket index at the given scale
+    def computeIndex(value: Double, scale: Int): Int = {
+      val scaleFactor = math.scalb(1.0 / math.log(2), scale)
+      math.ceil(math.log(value) * scaleFactor).toInt - 1
+    }
+
+    // builds Buckets from a list of positive values at the given scale
+    def toBuckets(absValues: List[Double], scale: Int): PointData.ExponentialHistogram.Buckets =
+      if (absValues.isEmpty) PointData.ExponentialHistogram.Buckets.empty
+      else {
+        val indices = absValues.map(v => computeIndex(v, scale))
+        val minIdx = indices.min
+        val maxIdx = indices.max
+        val counts = indices.foldLeft(Vector.fill(maxIdx - minIdx + 1)(0L)) { (acc, idx) =>
+          val pos = idx - minIdx
+          acc.updated(pos, acc(pos) + 1L)
+        }
+        PointData.ExponentialHistogram.Buckets(minIdx, counts)
+      }
+
+    for {
+      window <- Gens.timeWindow
+      attributes <- Gens.attributes
+      scale <- Gens.exponentialHistogramScale
+      boundaries <- Gens.bucketBoundaries
+      size = boundaries.length + 1
+      // values in [0.01, 100.0] to cover both sub-unit and above-unit ranges
+      // while keeping bucket index spans manageable at all scales
+      posAbsValues <- Gen.listOfN(size, Gen.choose(0.01, 100.0))
+      negAbsValues <- Gen.listOfN(size, Gen.choose(0.01, 100.0))
+      zeroCount <- Gen.choose(0L, size.toLong)
+      allValues = posAbsValues ++ negAbsValues.map(-_) ++ List.fill(zeroCount.toInt)(0.0)
+      nonZeroValues = posAbsValues ++ negAbsValues.map(-_)
+      exemplars <- Gen.listOfN(nonZeroValues.size, Gens.doubleExemplarData)
+      histogramStats <- stats(allValues)
+    } yield PointData.exponentialHistogram(
+      window,
+      attributes,
+      nonZeroValues
+        .zip(exemplars)
+        .map { case (value, exemplar) =>
+          ExemplarData.double(exemplar.filteredAttributes, exemplar.timestamp, exemplar.traceContext, value)
+        }
+        .toVector,
+      histogramStats,
+      scale,
+      zeroCount,
+      0.0,
+      toBuckets(posAbsValues, scale),
+      toBuckets(negAbsValues, scale)
+    )
+  }
+
   val pointDataNumber: Gen[PointData.NumberPoint] =
     Gen.oneOf(longNumberPointData, doubleNumberPointData)
 
   val pointData: Gen[PointData] =
-    Gen.oneOf(longNumberPointData, doubleNumberPointData, histogramPointData)
+    Gen.oneOf(longNumberPointData, doubleNumberPointData, histogramPointData, exponentialHistogramPointData)
 
   // See https://opentelemetry.io/docs/specs/otel/metrics/data-model/#sums
   // For delta monotonic sums, this means the reader SHOULD expect non-negative values.
@@ -309,8 +400,18 @@ trait Gens extends org.typelevel.otel4s.sdk.scalacheck.Gens {
       temporality
     )
 
+  val exponentialHistogramMetricPoints: Gen[MetricPoints.ExponentialHistogram] =
+    for {
+      point <- exponentialHistogramPointData
+      points <- Gen.listOf(exponentialHistogramPointData)
+      temporality <- Gens.aggregationTemporality
+    } yield MetricPoints.exponentialHistogram(
+      NonEmptyVector(point, points.toVector),
+      temporality
+    )
+
   val metricPoints: Gen[MetricPoints] =
-    Gen.oneOf(sumMetricPoints, gaugeMetricPoints, histogramMetricPoints)
+    Gen.oneOf(sumMetricPoints, gaugeMetricPoints, histogramMetricPoints, exponentialHistogramMetricPoints)
 
   val metricData: Gen[MetricData] =
     for {

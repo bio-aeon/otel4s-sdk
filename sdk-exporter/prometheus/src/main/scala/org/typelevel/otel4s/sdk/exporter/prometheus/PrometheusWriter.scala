@@ -343,6 +343,9 @@ object PrometheusWriter {
         case histogram: MetricPoints.Histogram
             if histogram.aggregationTemporality == AggregationTemporality.Cumulative =>
           true
+        case exponentialHistogram: MetricPoints.ExponentialHistogram
+            if exponentialHistogram.aggregationTemporality == AggregationTemporality.Cumulative =>
+          true
         case _ => false
       }
     }
@@ -355,8 +358,9 @@ object PrometheusWriter {
           } else {
             Gauge
           }
-        case _: MetricPoints.Gauge     => Gauge
-        case _: MetricPoints.Histogram => Histogram
+        case _: MetricPoints.Gauge                => Gauge
+        case _: MetricPoints.Histogram            => Histogram
+        case _: MetricPoints.ExponentialHistogram => Histogram
       }
     }
 
@@ -369,8 +373,9 @@ object PrometheusWriter {
             serializeGauges(metricGroup)
           }
 
-        case _: MetricPoints.Gauge     => serializeGauges(metricGroup)
-        case _: MetricPoints.Histogram => serializeHistograms(metricGroup)
+        case _: MetricPoints.Gauge                => serializeGauges(metricGroup)
+        case _: MetricPoints.Histogram            => serializeHistograms(metricGroup)
+        case _: MetricPoints.ExponentialHistogram => serializeExponentialHistograms(metricGroup)
       }
     }
 
@@ -413,28 +418,48 @@ object PrometheusWriter {
       serializeSumsOrGauges(metricGroup)
     }
 
-    private def serializeHistograms(metricGroup: MetricGroup): Either[Throwable, String] = {
+    private def serializeHistograms(metricGroup: MetricGroup): Either[Throwable, String] =
+      serializeHistogramPoints(metricGroup) { metric =>
+        metric.data.points.collect { case point: PointData.Histogram => point }.map { point =>
+          val buckets = point.boundaries.boundaries.toNev
+            .map2(point.counts.toNev) { case (boundaries, counts) =>
+              val boundariesWithInf = boundaries.map(formatDouble) :+ PosInf
+              val countsWithInf = if (counts.length > boundaries.length) {
+                counts
+              } else {
+                counts :+ 0L
+              }
+
+              boundariesWithInf.zipWith(countsWithInf)((_, _))
+            }
+            .getOrElse(NonEmptyVector.of((PosInf, point.counts.sum)))
+
+          (point.attributes, buckets, point.stats.map(s => (s.count, s.sum)))
+        }
+      }
+
+    private def serializeExponentialHistograms(metricGroup: MetricGroup): Either[Throwable, String] =
+      serializeHistogramPoints(metricGroup) { metric =>
+        metric.data.points.collect { case point: PointData.ExponentialHistogram => point }.map { point =>
+          val entries = exponentialBucketEntries(point)
+          val entriesWithInf = entries :+ (PosInf, 0L)
+          val buckets = NonEmptyVector.fromVectorUnsafe(entriesWithInf)
+
+          (point.attributes, buckets, point.stats.map(s => (s.count, s.sum)))
+        }
+      }
+
+    private def serializeHistogramPoints(metricGroup: MetricGroup)(
+        extractPoints: MetricData => Vector[(Attributes, NonEmptyVector[(String, Long)], Option[(Long, Double)])]
+    ): Either[Throwable, String] = {
       val typeLine = s"${metricGroup.prometheusName} $Histogram"
       metricGroup.metrics
         .flatTraverse { metric =>
           val scopeLabels = prepareScopeLabels(metric.instrumentationScope)
           NonEmptyVector
-            .fromVectorUnsafe(metric.data.points.collect { case point: PointData.Histogram => point })
-            .flatTraverse { point =>
-              val buckets = point.boundaries.boundaries.toNev
-                .map2(point.counts.toNev) { case (boundaries, counts) =>
-                  val boundariesWithInf = boundaries.map(formatDouble) :+ PosInf
-                  val countsWithInf = if (counts.length > boundaries.length) {
-                    counts
-                  } else {
-                    counts :+ 0L
-                  }
-
-                  boundariesWithInf.zipWith(countsWithInf)((_, _))
-                }
-                .getOrElse(NonEmptyVector.of((PosInf, point.counts.sum)))
-
-              attributesToLabels(point.attributes).map(_ ++ scopeLabels).map { labels =>
+            .fromVectorUnsafe(extractPoints(metric))
+            .flatTraverse { case (attributes, buckets, stats) =>
+              attributesToLabels(attributes).map(_ ++ scopeLabels).map { labels =>
                 buckets.tail
                   .foldLeft((NonEmptyVector.one(buckets.head), buckets.head._2)) {
                     case ((res, countSoFar), (boundary, count)) =>
@@ -448,16 +473,44 @@ object PrometheusWriter {
                       labels + ("le" -> boundary),
                       cumulativeCount.toString
                     )
-                  } ++ point.stats.map { stats =>
+                  } ++ stats.map { case (count, sum) =>
                   Vector(
-                    PrometheusTextPoint(s"${metricGroup.prometheusName}_count", labels, stats.count.toString),
-                    PrometheusTextPoint(s"${metricGroup.prometheusName}_sum", labels, formatDouble(stats.sum))
+                    PrometheusTextPoint(s"${metricGroup.prometheusName}_count", labels, count.toString),
+                    PrometheusTextPoint(s"${metricGroup.prometheusName}_sum", labels, formatDouble(sum))
                   )
                 }.orEmpty
               }
             }
         }
         .map(PrometheusTextRecord(metricGroup.helpLine(metricGroup.prometheusName), typeLine, _).show)
+    }
+
+    private def exponentialBucketEntries(point: PointData.ExponentialHistogram): Vector[(String, Long)] = {
+      val base = math.pow(2.0, math.pow(2.0, -point.scale.toDouble))
+
+      def toEntries(
+          buckets: PointData.ExponentialHistogram.Buckets,
+          negate: Boolean
+      ): Vector[(String, Long)] = {
+        if (buckets.counts.isEmpty) {
+          return Vector.empty
+        }
+
+        buckets.counts.zipWithIndex.map { case (count, j) =>
+          val boundary = if (negate) {
+            -math.pow(base, (buckets.offset + j).toDouble)
+          } else {
+            math.pow(base, (buckets.offset + j + 1).toDouble)
+          }
+          (formatDouble(boundary), count)
+        }
+      }
+
+      val negEntries = toEntries(point.negativeBuckets, negate = true).reverse
+      val zeroEntry = Vector((formatDouble(point.zeroThreshold), point.zeroCount))
+      val posEntries = toEntries(point.positiveBuckets, negate = false)
+
+      negEntries ++ zeroEntry ++ posEntries
     }
 
     private def serializeSumsOrGauges(

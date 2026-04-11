@@ -92,6 +92,20 @@ object MetricPoints {
     def aggregationTemporality: AggregationTemporality
   }
 
+  /** ExponentialHistogram represents the type of a metric that is calculated by aggregating as an exponential histogram
+    * of all reported double measurements over a time interval.
+    *
+    * @see
+    *   [[https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram]]
+    */
+  sealed trait ExponentialHistogram extends MetricPoints {
+    def points: NonEmptyVector[PointData.ExponentialHistogram]
+
+    /** The aggregation temporality of this aggregation.
+      */
+    def aggregationTemporality: AggregationTemporality
+  }
+
   /** Creates a [[Sum]] with the given values.
     */
   def sum[A <: PointData.NumberPoint](
@@ -116,6 +130,14 @@ object MetricPoints {
   ): Histogram =
     HistogramImpl(points, aggregationTemporality)
 
+  /** Creates an [[ExponentialHistogram]] with the given values.
+    */
+  def exponentialHistogram(
+      points: NonEmptyVector[PointData.ExponentialHistogram],
+      aggregationTemporality: AggregationTemporality
+  ): ExponentialHistogram =
+    ExponentialHistogramImpl(points, aggregationTemporality)
+
   implicit val metricPointsHash: Hash[MetricPoints] = {
     val sumHash: Hash[Sum] =
       Hash.by { s =>
@@ -132,12 +154,16 @@ object MetricPoints {
     val histogramHash: Hash[Histogram] =
       Hash.by(h => (h.points.toVector: Vector[PointData], h.aggregationTemporality))
 
+    val exponentialHistogramHash: Hash[ExponentialHistogram] =
+      Hash.by(h => (h.points.toVector: Vector[PointData], h.aggregationTemporality))
+
     new Hash[MetricPoints] {
       def hash(x: MetricPoints): Int =
         x match {
-          case sum: Sum             => sumHash.hash(sum)
-          case gauge: Gauge         => gaugeHash.hash(gauge)
-          case histogram: Histogram => histogramHash.hash(histogram)
+          case sum: Sum                                   => sumHash.hash(sum)
+          case gauge: Gauge                               => gaugeHash.hash(gauge)
+          case histogram: Histogram                       => histogramHash.hash(histogram)
+          case exponentialHistogram: ExponentialHistogram => exponentialHistogramHash.hash(exponentialHistogram)
         }
 
       def eqv(x: MetricPoints, y: MetricPoints): Boolean =
@@ -148,6 +174,8 @@ object MetricPoints {
             gaugeHash.eqv(left, right)
           case (left: Histogram, right: Histogram) =>
             histogramHash.eqv(left, right)
+          case (left: ExponentialHistogram, right: ExponentialHistogram) =>
+            exponentialHistogramHash.eqv(left, right)
           case _ =>
             false
         }
@@ -170,6 +198,11 @@ object MetricPoints {
         "MetricPoints.Histogram{" +
           s"points=${(h.points: NonEmptyVector[PointData]).mkString_("{", ",", "}")}, " +
           s"aggregationTemporality=${h.aggregationTemporality}}"
+
+      case eh: ExponentialHistogram =>
+        "MetricPoints.ExponentialHistogram{" +
+          s"points=${(eh.points: NonEmptyVector[PointData]).mkString_("{", ",", "}")}, " +
+          s"aggregationTemporality=${eh.aggregationTemporality}}"
     }
   }
 
@@ -187,5 +220,10 @@ object MetricPoints {
       points: NonEmptyVector[PointData.Histogram],
       aggregationTemporality: AggregationTemporality
   ) extends Histogram
+
+  private final case class ExponentialHistogramImpl(
+      points: NonEmptyVector[PointData.ExponentialHistogram],
+      aggregationTemporality: AggregationTemporality
+  ) extends ExponentialHistogram
 
 }

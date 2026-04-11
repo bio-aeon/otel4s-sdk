@@ -158,6 +158,9 @@ class OtlpMetricExporterSuite extends CatsEffectSuite with ScalaCheckEffectSuite
               adaptHistogramPoints(histogram.points),
               AggregationTemporality.Cumulative
             )
+
+          case exponentialHistogram: MetricPoints.ExponentialHistogram =>
+            exponentialHistogram
         }
       )
 
@@ -184,6 +187,9 @@ class OtlpMetricExporterSuite extends CatsEffectSuite with ScalaCheckEffectSuite
 
           case histogram: MetricPoints.Histogram =>
             histogramPointsToSeries(const, histogram.points)
+
+          case _: MetricPoints.ExponentialHistogram =>
+            Vector.empty
         }
       }
 

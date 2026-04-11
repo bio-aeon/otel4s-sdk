@@ -51,7 +51,12 @@ class AggregatorSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
       for {
         boundaries <- Gens.bucketBoundaries
         recordMinMax <- Gen.oneOf(true, false)
-      } yield Aggregation.ExplicitBucketHistogram(boundaries, recordMinMax)
+      } yield Aggregation.ExplicitBucketHistogram(boundaries, recordMinMax),
+      for {
+        maxBuckets <- Gens.exponentialHistogramMaxBuckets
+        maxScale <- Gens.exponentialHistogramScale
+        recordMinMax <- Gen.oneOf(true, false)
+      } yield Aggregation.Base2ExponentialHistogram(maxBuckets, maxScale, recordMinMax)
     )
 
   private val asynchronousAggregationGen: Gen[Aggregation.Asynchronous] =
@@ -99,6 +104,18 @@ class AggregatorSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
             )
           )
 
+        def exponentialHistogramPoints(
+            scale: Int
+        ): NonEmptyVector[PointData.ExponentialHistogram] =
+          NonEmptyVector.one(
+            PointDataUtils.toExponentialHistogramPoint(
+              values.map(_.value),
+              Attributes.empty,
+              TimeWindow(1.second, 10.seconds),
+              scale
+            )
+          )
+
         val points: NonEmptyVector[PointData] = {
           aggregation match {
             case Aggregation.Default =>
@@ -118,6 +135,9 @@ class AggregatorSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
 
             case Aggregation.ExplicitBucketHistogram(boundaries, _) =>
               histogramPoints(boundaries)
+
+            case Aggregation.Base2ExponentialHistogram(_, maxScale, _) =>
+              exponentialHistogramPoints(maxScale)
           }
         }
 
@@ -139,6 +159,9 @@ class AggregatorSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
           def histogram(boundaries: BucketBoundaries) =
             MetricPoints.histogram(histogramPoints(boundaries), temporality)
 
+          def exponentialHistogram(scale: Int) =
+            MetricPoints.exponentialHistogram(exponentialHistogramPoints(scale), temporality)
+
           val metricPoints = aggregation match {
             case Aggregation.Default =>
               descriptor.instrumentType match {
@@ -149,9 +172,10 @@ class AggregatorSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
                   histogram(Aggregation.Defaults.Boundaries)
               }
 
-            case Aggregation.Sum                           => sum
-            case Aggregation.LastValue                     => lastValue
-            case Aggregation.ExplicitBucketHistogram(b, _) => histogram(b)
+            case Aggregation.Sum                                => sum
+            case Aggregation.LastValue                          => lastValue
+            case Aggregation.ExplicitBucketHistogram(b, _)      => histogram(b)
+            case Aggregation.Base2ExponentialHistogram(_, s, _) => exponentialHistogram(s)
           }
 
           MetricData(

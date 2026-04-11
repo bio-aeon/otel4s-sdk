@@ -179,6 +179,166 @@ object PointData {
 
   }
 
+  /** A population of recorded measurements with exponentially-defined bucket boundaries. Unlike [[Histogram]], which
+    * uses explicitly specified boundaries, ExponentialHistogram compresses bucket boundaries using an exponential
+    * formula, making it suitable for high dynamic range data with small relative error.
+    *
+    * @see
+    *   [[https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram]]
+    */
+  sealed trait ExponentialHistogram extends PointData {
+
+    /** The [[ExemplarData]] associated with the histogram data.
+      */
+    def exemplars: Vector[ExemplarData.DoubleExemplar]
+
+    /** The [[ExponentialHistogram.Stats]] of the current measurement. `None` means the histogram is empty.
+      */
+    def stats: Option[ExponentialHistogram.Stats]
+
+    /** The resolution of the histogram. Higher values offer greater precision.
+      */
+    def scale: Int
+
+    /** The count of values whose absolute value is less than or equal to `zeroThreshold`.
+      */
+    def zeroCount: Long
+
+    /** The width of the zero region.
+      */
+    def zeroThreshold: Double
+
+    /** The [[ExponentialHistogram.Buckets]] for positive values.
+      */
+    def positiveBuckets: ExponentialHistogram.Buckets
+
+    /** The [[ExponentialHistogram.Buckets]] for negative values, mapped by absolute value.
+      */
+    def negativeBuckets: ExponentialHistogram.Buckets
+  }
+
+  object ExponentialHistogram {
+
+    /** The bucket counts of an exponential histogram.
+      *
+      * @see
+      *   [[https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram]]
+      */
+    sealed trait Buckets {
+
+      /** The bucket index of the first entry in `counts`.
+        */
+      def offset: Int
+
+      /** The count of values in each bucket. `counts(i)` is the count for bucket at index `offset + i`.
+        */
+      def counts: Vector[Long]
+
+      /** The total count of all values across all buckets.
+        */
+      def totalCount: Long
+
+      override final def hashCode(): Int =
+        Hash[Buckets].hash(this)
+
+      override final def equals(obj: Any): Boolean =
+        obj match {
+          case other: Buckets => Hash[Buckets].eqv(this, other)
+          case _              => false
+        }
+
+      override final def toString: String =
+        Show[Buckets].show(this)
+    }
+
+    object Buckets {
+
+      /** Creates [[Buckets]] with the given values.
+        */
+      def apply(offset: Int, counts: Vector[Long]): Buckets =
+        Impl(offset, counts)
+
+      /** Creates empty [[Buckets]].
+        */
+      def empty: Buckets =
+        Impl(0, Vector.empty)
+
+      implicit val bucketsHash: Hash[Buckets] =
+        Hash.by(b => (b.offset, b.counts))
+
+      implicit val bucketsShow: Show[Buckets] =
+        Show.show { b =>
+          s"Buckets{offset=${b.offset}, counts=${b.counts}, totalCount=${b.totalCount}}"
+        }
+
+      private final case class Impl(
+          offset: Int,
+          counts: Vector[Long]
+      ) extends Buckets {
+        val totalCount: Long = counts.sum
+      }
+
+    }
+
+    /** The aggregated stats of the exponential histogram */
+    sealed trait Stats {
+
+      /** A sum of all values in the histogram. */
+      def sum: Double
+
+      /** The min of all values in the histogram. */
+      def min: Option[Double]
+
+      /** The max of all values in the histogram. */
+      def max: Option[Double]
+
+      /** The total population of points in the histogram. */
+      def count: Long
+
+      override final def hashCode(): Int =
+        Hash[Stats].hash(this)
+
+      override final def equals(obj: Any): Boolean =
+        obj match {
+          case other: Stats => Hash[Stats].eqv(this, other)
+          case _            => false
+        }
+
+      override final def toString: String =
+        Show[Stats].show(this)
+    }
+
+    object Stats {
+
+      /** Creates [[Stats]] with the given values.
+        */
+      def apply(sum: Double, min: Double, max: Double, count: Long): Stats =
+        Impl(sum, Some(min), Some(max), count)
+
+      /** Creates [[Stats]] without min and max values.
+        */
+      def withoutMinMax(sum: Double, count: Long): Stats =
+        Impl(sum, None, None, count)
+
+      implicit val statsHash: Hash[Stats] =
+        Hash.by(s => (s.sum, s.min, s.max, s.count))
+
+      implicit val statsShow: Show[Stats] =
+        Show.show { s =>
+          s"Stats{sum=${s.sum}, min=${s.min}, max=${s.max}, count=${s.count}}"
+        }
+
+      private final case class Impl(
+          sum: Double,
+          min: Option[Double],
+          max: Option[Double],
+          count: Long
+      ) extends Stats
+
+    }
+
+  }
+
   /** Creates a [[LongNumber]] with the given values.
     */
   def longNumber(
@@ -211,6 +371,31 @@ object PointData {
   ): Histogram =
     HistogramImpl(timeWindow, attributes, exemplars, stats, boundaries, counts)
 
+  /** Creates an [[ExponentialHistogram]] with the given values.
+    */
+  def exponentialHistogram(
+      timeWindow: TimeWindow,
+      attributes: Attributes,
+      exemplars: Vector[ExemplarData.DoubleExemplar],
+      stats: Option[ExponentialHistogram.Stats],
+      scale: Int,
+      zeroCount: Long,
+      zeroThreshold: Double,
+      positiveBuckets: ExponentialHistogram.Buckets,
+      negativeBuckets: ExponentialHistogram.Buckets
+  ): ExponentialHistogram =
+    ExponentialHistogramImpl(
+      timeWindow,
+      attributes,
+      exemplars,
+      stats,
+      scale,
+      zeroCount,
+      zeroThreshold,
+      positiveBuckets,
+      negativeBuckets
+    )
+
   implicit val pointDataHash: Hash[PointData] = {
     val numberHash: Hash[NumberPoint] = {
       // a value can be either Long or Double. The universal hashcode is safe
@@ -239,11 +424,27 @@ object PointData {
         )
       }
 
+    val exponentialHistogramHash: Hash[ExponentialHistogram] =
+      Hash.by { h =>
+        (
+          h.timeWindow,
+          h.attributes,
+          h.exemplars: Vector[ExemplarData],
+          h.stats,
+          h.scale,
+          h.zeroCount,
+          h.zeroThreshold,
+          h.positiveBuckets: ExponentialHistogram.Buckets,
+          h.negativeBuckets: ExponentialHistogram.Buckets
+        )
+      }
+
     new Hash[PointData] {
       def hash(x: PointData): Int =
         x match {
-          case point: NumberPoint   => numberHash.hash(point)
-          case histogram: Histogram => histogramHash.hash(histogram)
+          case point: NumberPoint                         => numberHash.hash(point)
+          case histogram: Histogram                       => histogramHash.hash(histogram)
+          case exponentialHistogram: ExponentialHistogram => exponentialHistogramHash.hash(exponentialHistogram)
         }
 
       def eqv(x: PointData, y: PointData): Boolean =
@@ -252,6 +453,8 @@ object PointData {
             numberHash.eqv(left, right)
           case (left: Histogram, right: Histogram) =>
             histogramHash.eqv(left, right)
+          case (left: ExponentialHistogram, right: ExponentialHistogram) =>
+            exponentialHistogramHash.eqv(left, right)
           case _ =>
             false
         }
@@ -280,6 +483,18 @@ object PointData {
           s"stats=${data.stats}, " +
           s"boundaries=${data.boundaries}, " +
           s"counts=${data.counts}}"
+
+      case data: ExponentialHistogram =>
+        "PointData.ExponentialHistogram{" +
+          s"timeWindow=${data.timeWindow}, " +
+          s"attributes=${data.attributes}, " +
+          s"exemplars=${data.exemplars}, " +
+          s"stats=${data.stats}, " +
+          s"scale=${data.scale}, " +
+          s"zeroCount=${data.zeroCount}, " +
+          s"zeroThreshold=${data.zeroThreshold}, " +
+          s"positiveBuckets=${data.positiveBuckets}, " +
+          s"negativeBuckets=${data.negativeBuckets}}"
     }
 
   private final case class LongNumberImpl(
@@ -304,5 +519,17 @@ object PointData {
       boundaries: BucketBoundaries,
       counts: Vector[Long]
   ) extends Histogram
+
+  private final case class ExponentialHistogramImpl(
+      timeWindow: TimeWindow,
+      attributes: Attributes,
+      exemplars: Vector[ExemplarData.DoubleExemplar],
+      stats: Option[ExponentialHistogram.Stats],
+      scale: Int,
+      zeroCount: Long,
+      zeroThreshold: Double,
+      positiveBuckets: ExponentialHistogram.Buckets,
+      negativeBuckets: ExponentialHistogram.Buckets
+  ) extends ExponentialHistogram
 
 }

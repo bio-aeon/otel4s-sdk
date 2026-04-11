@@ -39,6 +39,14 @@ class AggregationSuite extends DisciplineSuite {
           recordMinMax <- Gen.oneOf(true, false)
         } yield Aggregation.explicitBucketHistogram(
           ExplicitBucketHistogramOptions(boundaries, recordMinMax)
+        ),
+        Gen.const(Aggregation.base2ExponentialHistogram),
+        for {
+          maxBuckets <- Gens.exponentialHistogramMaxBuckets
+          maxScale <- Gens.exponentialHistogramScale
+          recordMinMax <- Gen.oneOf(true, false)
+        } yield Aggregation.base2ExponentialHistogram(
+          Base2ExponentialHistogramOptions(maxBuckets, maxScale, recordMinMax)
         )
       )
     )
@@ -57,6 +65,8 @@ class AggregationSuite extends DisciplineSuite {
         case Aggregation.LastValue                                         => "Aggregation.LastValue"
         case Aggregation.ExplicitBucketHistogram(boundaries, recordMinMax) =>
           s"Aggregation.ExplicitBucketHistogram{boundaries=$boundaries, recordMinMax=$recordMinMax}"
+        case Aggregation.Base2ExponentialHistogram(maxBuckets, maxScale, recordMinMax) =>
+          s"Aggregation.Base2ExponentialHistogram{maxBuckets=$maxBuckets, maxScale=$maxScale, recordMinMax=$recordMinMax}"
       }
 
       assertEquals(Show[Aggregation].show(aggregation), expected)
@@ -113,6 +123,18 @@ class AggregationSuite extends DisciplineSuite {
 
         InstrumentType.values.filterNot(compatible).foreach { tpe =>
           assert(!bucket.compatibleWith(tpe))
+        }
+
+      case exponential @ Aggregation.Base2ExponentialHistogram(_, _, _) =>
+        val compatible: Set[InstrumentType] = Set(
+          InstrumentType.Counter,
+          InstrumentType.Histogram
+        )
+
+        compatible.foreach(tpe => assert(exponential.compatibleWith(tpe)))
+
+        InstrumentType.values.filterNot(compatible).foreach { tpe =>
+          assert(!exponential.compatibleWith(tpe))
         }
     }
   }

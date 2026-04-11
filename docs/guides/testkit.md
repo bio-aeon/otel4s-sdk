@@ -110,8 +110,14 @@ object TelemetryMetric {
 
       case histogram: MetricPoints.Histogram =>
         Histogram(
-          metric.name, 
+          metric.name,
           histogram.points.toVector.flatMap(_.stats.map(_.sum))
+        )
+
+      case exponentialHistogram: MetricPoints.ExponentialHistogram =>
+        Histogram(
+          metric.name,
+          exponentialHistogram.points.toVector.flatMap(_.stats.map(_.sum))
         )
     }
 

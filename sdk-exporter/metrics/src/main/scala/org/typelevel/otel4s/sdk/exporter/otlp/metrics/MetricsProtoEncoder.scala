@@ -148,6 +148,37 @@ private object MetricsProtoEncoder {
     )
   }
 
+  implicit val exponentialHistogramBucketsEncoder: ProtoEncoder[
+    PointData.ExponentialHistogram.Buckets,
+    Proto.ExponentialHistogramDataPoint.Buckets
+  ] = { buckets =>
+    Proto.ExponentialHistogramDataPoint.Buckets(
+      offset = buckets.offset,
+      bucketCounts = buckets.counts
+    )
+  }
+
+  implicit val exponentialHistogramPointEncoder: ProtoEncoder[
+    PointData.ExponentialHistogram,
+    Proto.ExponentialHistogramDataPoint
+  ] = { point =>
+    Proto.ExponentialHistogramDataPoint(
+      attributes = ProtoEncoder.encode(point.attributes),
+      startTimeUnixNano = point.timeWindow.start.toNanos,
+      timeUnixNano = point.timeWindow.end.toNanos,
+      count = point.stats.map(_.count).getOrElse(0L),
+      sum = point.stats.map(_.sum),
+      scale = point.scale,
+      zeroCount = point.zeroCount,
+      positive = Some(ProtoEncoder.encode(point.positiveBuckets)),
+      negative = Some(ProtoEncoder.encode(point.negativeBuckets)),
+      exemplars = point.exemplars.map(ProtoEncoder.encode(_)),
+      min = point.stats.flatMap(_.min),
+      max = point.stats.flatMap(_.max),
+      zeroThreshold = point.zeroThreshold
+    )
+  }
+
   implicit val metricPointsEncoder: ProtoEncoder[
     MetricPoints,
     Proto.Metric.Data
@@ -171,6 +202,14 @@ private object MetricsProtoEncoder {
         Proto.Histogram(
           histogram.points.toVector.map(ProtoEncoder.encode(_)),
           ProtoEncoder.encode(histogram.aggregationTemporality)
+        )
+      )
+
+    case exponentialHistogram: MetricPoints.ExponentialHistogram =>
+      Proto.Metric.Data.ExponentialHistogram(
+        Proto.ExponentialHistogram(
+          exponentialHistogram.points.toVector.map(ProtoEncoder.encode(_)),
+          ProtoEncoder.encode(exponentialHistogram.aggregationTemporality)
         )
       )
   }
