@@ -15,8 +15,6 @@ ThisBuild / startYear := Some(2022)
 // publish website from this branch
 ThisBuild / tlSitePublishBranch := Some("main")
 
-ThisBuild / resolvers += Resolver.sonatypeCentralSnapshots
-
 // VM runs out of memory when linking multiple targets concurrently, hence limit it
 Global / concurrentRestrictions += Tags.limit(NativeTags.Link, 1)
 
@@ -97,7 +95,7 @@ val ScalaPBCirceVersion = "0.16.0"
 val CaseInsensitiveVersion = "1.5.0"
 val ScalaJavaTimeVersion = "2.6.0"
 val ScribeVersion = "3.17.0"
-val Otel4sVersion = "0.16.0-M1"
+val Otel4sVersion = "0.16.0"
 
 lazy val scalaReflectDependency = Def.settings(
   libraryDependencies ++= {
