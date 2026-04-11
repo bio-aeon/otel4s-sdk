@@ -17,7 +17,8 @@
 package org.typelevel.otel4s.sdk.testkit.trace
 
 import cats.data.NonEmptyList
-import org.typelevel.otel4s.sdk.testkit.{ExpectationChecks, MaximumMatching}
+import org.typelevel.otel4s.sdk.testkit.ExpectationChecks
+import org.typelevel.otel4s.sdk.testkit.MaximumMatching
 import org.typelevel.otel4s.sdk.trace.data.SpanData
 
 /** An exact structural expectation for one exported trace subtree.
@@ -139,7 +140,10 @@ object TraceExpectation {
               case MatchMode.Ordered =>
                 ExpectationChecks.combine(
                   children.zip(tree.children).map { case (expectation, child) =>
-                    expectation.check(child).left.map(mismatches => NonEmptyList.one(Mismatch.ChildMismatch(child.span, mismatches)))
+                    expectation
+                      .check(child)
+                      .left
+                      .map(mismatches => NonEmptyList.one(Mismatch.ChildMismatch(child.span, mismatches)))
                   }
                 )
 

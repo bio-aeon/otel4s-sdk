@@ -137,12 +137,20 @@ test.unsafeRunSync()
 
 ## Testing spans
 
+The testkit also provides a dedicated structural expectation API for traces.
+It can match the full exported forest, nested subtrees, ordered or unordered children,
+timestamps, attributes, events, links, scope, resource, and more.
+
+For the traces expectation API, see the dedicated [Traces testkit guide](testkit-traces.md).
+
+____
+
 Let's assume we want to test the structure of created spans:
 
 ```scala mdoc:reset
 import cats.effect.IO
 import org.typelevel.otel4s.sdk.testkit.OpenTelemetrySdkTestkit
-import org.typelevel.otel4s.sdk.trace.data.SpanData
+import org.typelevel.otel4s.sdk.testkit.trace._
 import org.typelevel.otel4s.trace.TracerProvider
 import scala.concurrent.duration._
 
@@ -159,111 +167,35 @@ def program(tracerProvider: TracerProvider[IO]): IO[Unit] =
 // the test
 def test: IO[Unit] =
   OpenTelemetrySdkTestkit.inMemory[IO]().use { testkit =>
-    // the list of expected spans
-    val expected = List(
-      SpanTree(
-        TelemetrySpan("app.span"),
-        List(
-          SpanTree(TelemetrySpan("app.nested.1"), Nil),
-          SpanTree(TelemetrySpan("app.nested.2"), Nil)
+    val expected =
+      TraceForestExpectation.unordered(
+        TraceExpectation.unordered(
+          SpanExpectation.name("app.span").noParentSpanContext,
+          TraceExpectation.leaf(SpanExpectation.name("app.nested.1")),
+          TraceExpectation.leaf(SpanExpectation.name("app.nested.2"))
         )
       )
-    )
 
     for {
-      // invoke the program
       _ <- program(testkit.tracerProvider)
-      // collect the finished spans
       spans <- testkit.finishedSpans
-      // verify the collected spans
-      _ <- assertSpans(spans, expected)
-    } yield ()
+    } yield assertExpected(spans, expected)
   }
 
-// here you can use an assertion mechanism from your favorite testing framework
-def assertSpans(spans: List[SpanData], expected: List[SpanTree[TelemetrySpan]]): IO[Unit] =
-  IO {
-    val trees = SpanTree.fromSpans(spans)
-    assert(trees.map(_.map(data => TelemetrySpan(data.name))) == expected)
+def assertExpected(spans: List[org.typelevel.otel4s.sdk.trace.data.SpanData], expected: TraceForestExpectation): Unit =
+  TraceExpectations.check(spans, expected) match {
+    case Right(_) =>
+      ()
+    case Left(mismatches) =>
+      sys.error(TraceExpectations.format(mismatches))
   }
-
-// a minimized representation of the SpanData to simplify testing
-case class TelemetrySpan(name: String)
-
-// a tree-like representation of the spans
-case class SpanTree[A](current: A, children: List[SpanTree[A]]) {
-  def map[B](f: A => B): SpanTree[B] = SpanTree(f(current), children.map(_.map(f)))
-}
-object SpanTree {
-  def fromSpans(spans: List[SpanData]): List[SpanTree[SpanData]] = {
-    val byParent = spans.groupBy(s => s.parentSpanContext.map(_.spanIdHex))
-    val topNodes = byParent.getOrElse(None, Nil)
-    val bottomToTop = sortNodesByDepth(0, topNodes, byParent, Nil)
-    val maxDepth = bottomToTop.headOption.map(_.depth).getOrElse(0)
-    buildFromBottom(maxDepth, bottomToTop, byParent, Map.empty)
-  }
-  
-  private case class EntryWithDepth(data: SpanData, depth: Int)
-  
-  @annotation.tailrec
-  private def sortNodesByDepth(
-      depth: Int,
-      nodesInDepth: List[SpanData],
-      nodesByParent: Map[Option[String], List[SpanData]],
-      acc: List[EntryWithDepth]
-  ): List[EntryWithDepth] = {
-    val withDepth = nodesInDepth.map(n => EntryWithDepth(n, depth))
-    val calculated = withDepth ++ acc
-    val children = nodesInDepth.flatMap { n =>
-      nodesByParent.getOrElse(Some(n.spanContext.spanIdHex), Nil)
-    }
-    children match {
-      case Nil =>
-        calculated
-      case _ =>
-        sortNodesByDepth(depth + 1, children, nodesByParent, calculated)
-    }
-  }
-  
-  @annotation.tailrec
-  private def buildFromBottom(
-      depth: Int,
-      remaining: List[EntryWithDepth],
-      nodesByParent: Map[Option[String], List[SpanData]],
-      processedNodesById: Map[String, SpanTree[SpanData]]
-  ): List[SpanTree[SpanData]] = {
-    val (nodesOnCurrentDepth, rest) = remaining.span(_.depth == depth)
-    val newProcessedNodes = nodesOnCurrentDepth.map { n =>
-      val nodeId = n.data.spanContext.spanIdHex
-      val children = nodesByParent
-        .getOrElse(Some(nodeId), Nil)
-        .flatMap(c => processedNodesById.get(c.spanContext.spanIdHex))
-      val leaf = SpanTree(n.data, children)
-      nodeId -> leaf
-    }.toMap
-    if (depth > 0) {
-      buildFromBottom(
-        depth - 1, 
-        rest, 
-        nodesByParent, 
-        processedNodesById ++ newProcessedNodes
-      )
-    } else {
-      // top nodes
-      newProcessedNodes.values.toList
-    }
-  }
-}
 ```
 
-`SpanData` also includes much more than we usually want to verify in a unit test:
-resource and scope metadata, attributes, timing information, links, events, and status.
-
-For stable assertions, project each span into a smaller domain model first.
-Here, `TelemetrySpan` captures only the span name, while `SpanTree` validates parent-child structure.
+The trace expectation API removes the need to build a custom tree model in most tests.
+You can still keep expectations focused by matching only span names, or gradually add more detail:
+timestamps, attributes, events, links, scope, and resource.
 
 ```scala mdoc:invisible
-// we silently run the test to ensure it's actually correct
 import cats.effect.unsafe.implicits.global
 test.unsafeRunSync()
 ```
