@@ -94,10 +94,10 @@ object RuntimeMetrics {
     )
 
     private val DisabledAll: Config = ConfigImpl(
-      cpuMetricsEnabled = true,
-      gcMetricsEnabled = true,
-      memoryPoolMetricsEnabled = true,
-      threadMetricsEnabled = true,
+      cpuMetricsEnabled = false,
+      gcMetricsEnabled = false,
+      memoryPoolMetricsEnabled = false,
+      threadMetricsEnabled = false,
       gcMetricsRefreshRate = DefaultGcRefreshRate,
       gcMetricsBucketBoundaries = DefaultGcBucketBoundaries
     )
