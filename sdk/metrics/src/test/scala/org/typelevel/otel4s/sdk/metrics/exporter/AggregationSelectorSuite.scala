@@ -29,4 +29,20 @@ class AggregationSelectorSuite extends FunSuite {
     }
   }
 
+  test("exponential bucket histogram") {
+    val selector = AggregationSelector.exponentialBucketHistogram
+    InstrumentType.values.foreach { tpe =>
+      val expected = tpe match {
+        case InstrumentType.Histogram =>
+          Aggregation.Base2ExponentialHistogram(
+            Aggregation.Defaults.ExponentialMaxBuckets,
+            Aggregation.Defaults.ExponentialMaxScale,
+            recordMinMax = true
+          )
+        case _ => Aggregation.Default
+      }
+      assertEquals(selector.select(tpe), expected)
+    }
+  }
+
 }

@@ -50,11 +50,38 @@ object AggregationSelector {
     */
   def default: AggregationSelector = Default
 
+  /** Returns `Aggregation.base2ExponentialHistogram` for
+    * [[org.typelevel.otel4s.sdk.metrics.InstrumentType.Histogram Histogram]] instruments and [[Aggregation.default]]
+    * for all other instruments.
+    */
+  def exponentialBucketHistogram: AggregationSelector = ExponentialBucketHistogram
+
   private object Default extends AggregationSelector {
     def forSynchronous(
         instrumentType: InstrumentType.Synchronous
     ): Aggregation with Aggregation.Synchronous =
       Aggregation.Default
+
+    def forAsynchronous(
+        instrumentType: InstrumentType.Asynchronous
+    ): Aggregation with Aggregation.Asynchronous =
+      Aggregation.Default
+  }
+
+  private object ExponentialBucketHistogram extends AggregationSelector {
+    private val defaults: Base2ExponentialHistogramOptions =
+      Base2ExponentialHistogramOptions.default
+
+    private val Base2Exponential: Aggregation with Aggregation.Synchronous =
+      Aggregation.Base2ExponentialHistogram(defaults.maxBuckets, defaults.maxScale, defaults.recordMinMax)
+
+    def forSynchronous(
+        instrumentType: InstrumentType.Synchronous
+    ): Aggregation with Aggregation.Synchronous =
+      instrumentType match {
+        case InstrumentType.Histogram => Base2Exponential
+        case _                        => Aggregation.Default
+      }
 
     def forAsynchronous(
         instrumentType: InstrumentType.Asynchronous

@@ -218,25 +218,16 @@ class OtlpMetricExporterAutoConfigureSuite extends CatsEffectSuite {
       .use_ // explicit_bucket_histogram maps to the SDK default histogram aggregation
   }
 
-  test("load from the config - histogram aggregation base2 exponential - fail") {
+  test("load from the config - histogram aggregation base2 exponential") {
     val config = Config.ofProps(
       Map(
-        "otel.exporter.otlp.metrics.default.histogram.aggregation" -> "base2_exponential_bucket_histogram"
+        "otel.exporter.otlp.metrics.default.histogram.aggregation" -> "BASE2_EXPONENTIAL_BUCKET_HISTOGRAM"
       )
     )
 
     OtlpMetricExporterAutoConfigure[IO]
       .configure(config)
-      .use_
-      .attempt
-      .map(_.leftMap(_.getMessage))
-      .assertEquals(
-        Left("""Cannot autoconfigure [OtlpMetricExporter].
-               |Cause: Unrecognized default histogram aggregation [base2_exponential_bucket_histogram]. Supported options [explicit_bucket_histogram].
-               |Config:
-               |1) `otel.exporter.otlp.metrics.default.histogram.aggregation` - base2_exponential_bucket_histogram
-               |2) `otel.exporter.otlp.metrics.temporality.preference` - N/A""".stripMargin)
-      )
+      .use_ // base2_exponential_bucket_histogram maps to the exponential histogram aggregation
   }
 
 }
