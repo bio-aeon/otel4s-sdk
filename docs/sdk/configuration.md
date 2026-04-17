@@ -105,9 +105,7 @@ Target-specific properties are prioritized. E.g. `otel.exporter.otlp.metrics.end
 | otel.exporter.otlp.metrics.compression                   | OTEL\\_EXPORTER\\_OTLP\\_METRICS\\_COMPRESSION                       | The compression type to use on OTLP trace requests. Options include gzip. By default, no compression will be used.                                                                    |
 | otel.exporter.otlp.metrics.timeout                       | OTEL\\_EXPORTER\\_OTLP\\_METRICS\\_TIMEOUT                           | The maximum waiting time to send each OTLP trace batch. Default is `10 seconds`.                                                                                                      |
 | otel.exporter.otlp.metrics.temporality.preference        | OTEL\\_EXPORTER\\_OTLP\\_METRICS\\_TEMPORALITY\\_PREFERENCE          | Configure default aggregation temporality by instrument kind. Default is `cumulative`. Supported values (case-insensitive): `cumulative`, `delta`, `lowmemory`.                       |
-| otel.exporter.otlp.metrics.default.histogram.aggregation | OTEL\\_EXPORTER\\_OTLP\\_METRICS\\_DEFAULT\\_HISTOGRAM\\_AGGREGATION | Configure default histogram aggregation. Default is `explicit_bucket_histogram`. Supported value: `explicit_bucket_histogram`.                                                        |
-
-`otel.exporter.otlp.metrics.default.histogram.aggregation` currently rejects `base2_exponential_bucket_histogram`, since exponential histogram aggregation is not implemented in this SDK yet.
+| otel.exporter.otlp.metrics.default.histogram.aggregation | OTEL\\_EXPORTER\\_OTLP\\_METRICS\\_DEFAULT\\_HISTOGRAM\\_AGGREGATION | Configure default histogram aggregation. Default is `explicit_bucket_histogram`. Supported values: `explicit_bucket_histogram`, `base2_exponential_bucket_histogram`.                  |
 
 ### Prometheus exporter
 

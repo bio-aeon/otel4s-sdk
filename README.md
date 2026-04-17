@@ -114,4 +114,3 @@ Experimental status guidance:
 Current known limitations include:
 
 - No SPI-style autoloading for third-party components
-- The exponential histogram aggregation is not implemented yet

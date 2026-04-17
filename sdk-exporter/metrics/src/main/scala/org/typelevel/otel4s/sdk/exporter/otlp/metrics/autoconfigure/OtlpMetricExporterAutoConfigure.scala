@@ -128,16 +128,13 @@ private final class OtlpMetricExporterAutoConfigure[
           Right(AggregationSelector.default)
 
         case "base2_exponential_bucket_histogram" =>
-          Left(
-            ConfigurationError(
-              "Unrecognized default histogram aggregation [base2_exponential_bucket_histogram]. Supported options [explicit_bucket_histogram]"
-            )
-          )
+          Right(AggregationSelector.exponentialBucketHistogram)
 
         case _ =>
           Left(
             ConfigurationError(
-              s"Unrecognized default histogram aggregation [$s]. Supported options [explicit_bucket_histogram]"
+              s"Unrecognized default histogram aggregation [$s]. " +
+                "Supported options [explicit_bucket_histogram, base2_exponential_bucket_histogram]"
             )
           )
       }
