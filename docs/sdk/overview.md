@@ -84,8 +84,4 @@ OpenTelemetrySdk.autoConfigured[IO](
 )
 ```
 
-### Metrics missing features
-
-- `Exponential Histogram` aggregation is not supported yet
-
 [oteljava]: https://typelevel.org/otel4s/oteljava/overview.html

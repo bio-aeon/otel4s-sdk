@@ -83,10 +83,6 @@ OpenTelemetrySdk.autoConfigured[IO](
 )
 ```
 
-### Metrics missing features
-
-- `Exponential Histogram` aggregation is not supported yet
-
 @:callout(warning)
 
 `OtelJava.autoConfigured` creates an **isolated** **non-global** instance.
