@@ -212,12 +212,14 @@ lazy val `sdk-logs` = crossProject(JVMPlatform, JSPlatform, NativePlatform)
 lazy val `sdk-logs-testkit` = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("sdk/logs-testkit"))
-  .dependsOn(`sdk-logs`)
+  .dependsOn(`sdk-common-testkit`, `sdk-logs`)
   .settings(artifactUploadSettings)
   .settings(
     name := "otel4s-sdk-logs-testkit",
     startYear := Some(2025)
   )
+  .settings(munitDependencies)
+  .jsSettings(scalaJSLinkerSettings)
 
 lazy val `sdk-metrics` = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)

@@ -44,3 +44,11 @@ It can match the full exported forest, nested subtrees, ordered or unordered chi
 timestamps, attributes, events, links, scope, resource, and more.
 
 For the traces expectation API, see the dedicated [Traces testkit guide](testkit-traces.md).
+
+## Testing logs
+
+The testkit also provides a dedicated expectation API for SDK logs.
+It can match body values, severity, event name, timestamps, trace correlation, attributes,
+scope, resource, and more.
+
+For the logs expectation API, see the dedicated [Logs testkit guide](testkit-logs.md).
