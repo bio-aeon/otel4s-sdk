@@ -37,7 +37,7 @@ private object CpuMetrics {
       _ <- Meter[F].batchCallback.of(
         Meter[F]
           .observableCounter[Double](MetricNames.ProcessCpuTime)
-          .withDescription("Total CPU seconds broken down by different states.")
+          .withDescription("Total CPU seconds broken down by different CPU modes.")
           .withUnit("s")
           .createObserver,
         Meter[F]
