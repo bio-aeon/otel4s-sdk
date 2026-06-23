@@ -37,7 +37,7 @@ private object NodeMemoryMetrics {
     Meter[F].batchCallback.of(
       Meter[F]
         .observableGauge[Double](MetricNames.V8jsMemoryHeapLimit)
-        .withDescription("Total heap memory size pre-allocated.")
+        .withDescription("Total heap memory size pre-allocated for a heap space.")
         .withUnit("By")
         .createObserver,
       Meter[F]
