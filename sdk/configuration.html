@@ -114,6 +114,7 @@
     <li class="level2 nav-leaf"><a href="../guides/testkit.html">Testing with testkit</a></li>
     <li class="level2 nav-leaf"><a href="../guides/testkit-metrics.html">Testkit | Metrics</a></li>
     <li class="level2 nav-leaf"><a href="../guides/testkit-traces.html">Testkit | Traces</a></li>
+    <li class="level2 nav-leaf"><a href="../guides/testkit-logs.html">Testkit | Logs</a></li>
     <li class="level1 nav-header">SDK</li>
     <li class="level2 nav-leaf"><a href="overview.html">Overview</a></li>
     <li class="level2 active nav-leaf"><a href="#">Configuration</a></li>
@@ -373,11 +374,10 @@
             <tr>
               <td>otel.exporter.otlp.metrics.default.histogram.aggregation</td>
               <td>OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION</td>
-              <td>Configure default histogram aggregation. Default is <code>explicit_bucket_histogram</code>. Supported value: <code>explicit_bucket_histogram</code>.</td>
+              <td>Configure default histogram aggregation. Default is <code>explicit_bucket_histogram</code>. Supported values: <code>explicit_bucket_histogram</code>, <code>base2_exponential_bucket_histogram</code>.</td>
             </tr>
           </tbody>
         </table>
-        <p><code>otel.exporter.otlp.metrics.default.histogram.aggregation</code> currently rejects <code>base2_exponential_bucket_histogram</code>, since exponential histogram aggregation is not implemented in this SDK yet.</p>
         
         <h3 id="prometheus-exporter" class="section"><a class="anchor-link left" href="#prometheus-exporter"><i class="icofont-laika link">&#xef71;</i></a>Prometheus exporter</h3>
         <p>The exporter launches an HTTP server which responds to the HTTP requests with Prometheus metrics in the appropriate format.</p>
