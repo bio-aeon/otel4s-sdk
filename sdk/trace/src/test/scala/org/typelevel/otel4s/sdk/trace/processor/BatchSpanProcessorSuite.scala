@@ -18,7 +18,9 @@ package org.typelevel.otel4s.sdk.trace
 package processor
 
 import cats.Foldable
+import cats.effect.Deferred
 import cats.effect.IO
+import cats.effect.Ref
 import cats.effect.std.Queue
 import cats.effect.testkit.TestControl
 import cats.syntax.foldable._
@@ -157,6 +159,44 @@ class BatchSpanProcessorSuite extends CatsEffectSuite with ScalaCheckEffectSuite
     }
   }
 
+  test("do not export concurrently when force flush overlaps the worker") {
+    TestControl.executeEmbed {
+      for {
+        firstExportStarted <- Deferred[IO, Unit]
+        releaseFirstExport <- Deferred[IO, Unit]
+        overlappingExport <- Deferred[IO, Unit]
+        exportCount <- Ref.of[IO, Int](0)
+        exporter = new CoordinatedExporter(
+          firstExportStarted,
+          releaseFirstExport,
+          overlappingExport,
+          exportCount
+        )
+        result <- BatchSpanProcessor
+          .builder(exporter)
+          .withScheduleDelay(1.hour)
+          .withMaxQueueSize(1)
+          .withMaxExportBatchSize(1)
+          .build
+          .use { processor =>
+            for {
+              _ <- processor.onEnd(sampledSpan)
+              _ <- firstExportStarted.get
+              flush <- processor.forceFlush.start
+              _ <- IO.sleep(1.second)
+              overlap <- overlappingExport.tryGet
+              _ <- releaseFirstExport.complete(())
+              _ <- flush.joinWithNever
+              count <- exportCount.get
+            } yield (overlap, count)
+          }
+      } yield {
+        assertEquals(result._1, None)
+        assertEquals(result._2, 1)
+      }
+    }
+  }
+
   override protected def scalaCheckTestParameters: Test.Parameters =
     super.scalaCheckTestParameters
       .withMinSuccessfulTests(10)
@@ -189,6 +229,24 @@ class BatchSpanProcessorSuite extends CatsEffectSuite with ScalaCheckEffectSuite
 
     def exportSpans[G[_]: Foldable](spans: G[SpanData]): IO[Unit] =
       IO.monotonic.flatMap(exportTimes.offer)
+
+    def flush: IO[Unit] =
+      IO.unit
+  }
+
+  private class CoordinatedExporter(
+      firstExportStarted: Deferred[IO, Unit],
+      releaseFirstExport: Deferred[IO, Unit],
+      overlappingExport: Deferred[IO, Unit],
+      exportCount: Ref[IO, Int]
+  ) extends SpanExporter.Unsealed[IO] {
+    val name: String = "coordinated"
+
+    def exportSpans[G[_]: Foldable](spans: G[SpanData]): IO[Unit] =
+      exportCount.updateAndGet(_ + 1).flatMap {
+        case 1 => firstExportStarted.complete(()).void *> releaseFirstExport.get
+        case _ => overlappingExport.complete(()).void
+      }
 
     def flush: IO[Unit] =
       IO.unit
