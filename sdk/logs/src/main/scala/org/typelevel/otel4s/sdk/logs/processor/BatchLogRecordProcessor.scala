@@ -19,7 +19,7 @@ package org.typelevel.otel4s.sdk.logs.processor
 import cats.effect.Ref
 import cats.effect.Resource
 import cats.effect.Temporal
-import cats.effect.std.CountDownLatch
+import cats.effect.std.Mutex
 import cats.effect.std.Queue
 import cats.effect.syntax.all._
 import cats.syntax.all._
@@ -48,7 +48,8 @@ import scala.concurrent.duration._
   */
 private final class BatchLogRecordProcessor[F[_]: Temporal: Diagnostic] private (
     queue: Queue[F, LogRecordData],
-    signal: CountDownLatch[F],
+    wakeup: Queue[F, Unit],
+    mutex: Mutex[F],
     state: Ref[F, BatchLogRecordProcessor.State],
     exporter: LogRecordExporter[F],
     config: BatchLogRecordProcessor.Config
@@ -65,80 +66,75 @@ private final class BatchLogRecordProcessor[F[_]: Temporal: Diagnostic] private 
     s"maxQueueSize=${config.maxQueueSize}, " +
     s"maxExportBatchSize=${config.maxExportBatchSize}}"
 
-  def onEmit(context: Context, logRecordRef: LogRecordRef[F]): F[Unit] = {
-    def notifyWorker: F[Unit] =
-      for {
-        queueSize <- queue.size
-        state <- state.get
-        _ <- if (state.logsNeeded.exists(needed => queueSize >= needed)) signal.release else unit
-      } yield ()
-
-    for {
-      logRecord <- logRecordRef.toLogRecordData
-      offered <- queue.tryOffer(logRecord)
-      _ <- if (offered) notifyWorker else unit
-    } yield ()
-  }
+  def onEmit(context: Context, logRecordRef: LogRecordRef[F]): F[Unit] =
+    logRecordRef.toLogRecordData.flatMap { log =>
+      Temporal[F].uncancelable { _ =>
+        queue.tryOffer(log).flatMap {
+          case true  => wakeup.tryOffer(()).void
+          case false => unit
+        }
+      }
+    }
 
   def forceFlush: F[Unit] =
-    exportAll
+    mutex.lock.surround(exportAll)
 
   private def worker: F[Unit] =
     run.foreverM[Unit]
 
   private def run: F[Unit] =
-    Temporal[F].uncancelable { poll =>
-      // export the current batch and reset the state
-      def doExport(now: FiniteDuration, batch: Vector[LogRecordData]): F[Unit] =
-        poll(exportBatch(batch)).guarantee(
-          state.set(State(now + config.scheduleDelay, Vector.empty, None))
-        )
+    processBatch.flatMap {
+      case Some(waitTime) => waitForWakeup(waitTime)
+      case None           => unit
+    }
 
-      // wait either for:
-      // 1) the signal - it means the queue has enough logs
-      // 2) the timeout - it means we can export all remaining logs
-      def pollMore(now: FiniteDuration, nextExportTime: FiniteDuration, currentBatchSize: Int): F[Unit] = {
-        val pollWaitTime = nextExportTime - now
-        val logsNeeded = config.maxExportBatchSize - currentBatchSize
+  // dequeue, update the batch, and export under the same lock used by forceFlush
+  private def processBatch: F[Option[FiniteDuration]] =
+    mutex.lock.surround {
+      Temporal[F].uncancelable { poll =>
+        // export the current batch and reset the state
+        def doExport(now: FiniteDuration, batch: Vector[LogRecordData]): F[Unit] =
+          poll(exportBatch(batch)).guarantee(
+            state.set(State(now + config.scheduleDelay, Vector.empty))
+          )
 
-        val request =
-          for {
-            _ <- state.update(_.copy(logsNeeded = Some(logsNeeded)))
-            _ <- signal.await.timeoutTo(pollWaitTime, unit)
-          } yield ()
+        for {
+          st <- poll(state.get)
 
-        if (pollWaitTime > Duration.Zero) {
-          poll(request).guarantee(state.update(_.copy(logsNeeded = None)))
-        } else {
-          unit
-        }
+          // try to take enough logs to fill up the current batch
+          remaining = config.maxExportBatchSize - st.batch.size
+          logs <- if (remaining > 0) queue.tryTakeN(Some(remaining)) else List.empty[LogRecordData].pure[F]
+
+          // modify the state with the updated batch
+          nextState <- state.updateAndGet(_.copy(batch = st.batch ++ logs))
+
+          // the current timestamp
+          now <- Temporal[F].monotonic
+
+          result <- {
+            val batch = nextState.batch
+            val nextExportTime = nextState.nextExportTime
+
+            // two reasons to export:
+            // 1) the current batch size exceeds the limit
+            // 2) the worker is behind the scheduled export time
+            val canExport = batch.size >= config.maxExportBatchSize || now >= nextExportTime
+
+            if (canExport) doExport(now, batch).as(Option.empty[FiniteDuration])
+            else Some(nextExportTime - now).pure[F]
+          }
+        } yield result
       }
+    }
 
-      for {
-        st <- poll(state.get)
-
-        // try to take enough logs to fill up the current batch
-        logs <- queue.tryTakeN(Some(config.maxExportBatchSize - st.batch.size))
-
-        // modify the state with the updated batch
-        nextState <- state.updateAndGet(_.copy(batch = st.batch ++ logs))
-
-        // the current timestamp
-        now <- Temporal[F].monotonic
-
-        _ <- {
-          val batch = nextState.batch
-          val nextExportTime = nextState.nextExportTime
-
-          // two reasons to export:
-          // 1) the current batch size exceeds the limit
-          // 2) the worker is behind the scheduled export time
-          val canExport = batch.size >= config.maxExportBatchSize || now >= nextExportTime
-
-          if (canExport) doExport(now, batch)
-          else pollMore(now, nextExportTime, batch.size)
-        }
-      } yield ()
+  // wait either for:
+  // 1) a notification that logs are available
+  // 2) the timeout - it means we can export all remaining logs
+  private def waitForWakeup(waitTime: FiniteDuration): F[Unit] =
+    if (waitTime > Duration.Zero) {
+      wakeup.take.timeoutTo(waitTime, unit)
+    } else {
+      unit
     }
 
   // export all available data
@@ -148,7 +144,7 @@ private final class BatchLogRecordProcessor[F[_]: Temporal: Diagnostic] private 
       logRecordData <- queue.tryTakeN(None)
       all = st.batch ++ logRecordData
       _ <- all.grouped(config.maxExportBatchSize).toList.traverse_(exportBatch)
-      _ <- state.update(_.copy(batch = Vector.empty, logsNeeded = None))
+      _ <- state.update(_.copy(batch = Vector.empty))
     } yield ()
 
   private def exportBatch(batch: Vector[LogRecordData]): F[Unit] =
@@ -245,8 +241,7 @@ object BatchLogRecordProcessor {
 
   private final case class State(
       nextExportTime: FiniteDuration,
-      batch: Vector[LogRecordData],
-      logsNeeded: Option[Int]
+      batch: Vector[LogRecordData]
   )
 
   private final case class BuilderImpl[F[_]: Temporal: Diagnostic](
@@ -280,12 +275,14 @@ object BatchLogRecordProcessor {
       def create: F[BatchLogRecordProcessor[F]] =
         for {
           queue <- Queue.dropping[F, LogRecordData](maxQueueSize)
+          wakeup <- Queue.bounded[F, Unit](1)
+          mutex <- Mutex[F]
           now <- Temporal[F].monotonic
-          state <- Ref.of(State(now + config.scheduleDelay, Vector.empty, None))
-          signal <- CountDownLatch[F](1)
+          state <- Ref.of(State(now + config.scheduleDelay, Vector.empty))
         } yield new BatchLogRecordProcessor[F](
           queue = queue,
-          signal = signal,
+          wakeup = wakeup,
+          mutex = mutex,
           state = state,
           exporter = exporter,
           config = config
@@ -293,7 +290,7 @@ object BatchLogRecordProcessor {
 
       for {
         processor <- Resource.eval(create)
-        _ <- Resource.onFinalize(processor.exportAll)
+        _ <- Resource.onFinalize(processor.forceFlush)
         _ <- processor.worker.background
       } yield processor
     }

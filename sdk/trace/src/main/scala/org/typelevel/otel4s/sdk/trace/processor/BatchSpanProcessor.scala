@@ -21,7 +21,7 @@ package processor
 import cats.effect.Ref
 import cats.effect.Resource
 import cats.effect.Temporal
-import cats.effect.std.CountDownLatch
+import cats.effect.std.Mutex
 import cats.effect.std.Queue
 import cats.effect.syntax.monadCancel._
 import cats.effect.syntax.spawn._
@@ -53,7 +53,8 @@ import scala.concurrent.duration._
   */
 private final class BatchSpanProcessor[F[_]: Temporal: Diagnostic] private (
     queue: Queue[F, SpanData],
-    signal: CountDownLatch[F],
+    wakeup: Queue[F, Unit],
+    mutex: Mutex[F],
     state: Ref[F, BatchSpanProcessor.State],
     exporter: SpanExporter[F],
     config: BatchSpanProcessor.Config
@@ -74,84 +75,76 @@ private final class BatchSpanProcessor[F[_]: Temporal: Diagnostic] private (
 
   val onEnd: SpanProcessor.OnEnd[F] = SpanProcessor.OnEnd { (span: SpanData) =>
     if (span.spanContext.isSampled) {
-      // if 'spansNeeded' is defined, it means the worker is waiting for a certain number of spans
-      // and it waits for the 'signal'-latch to be released
-      // hence, if the queue size is >= than the number of needed spans, the latch can be released
-      def notifyWorker: F[Unit] =
-        for {
-          queueSize <- queue.size
-          state <- state.get
-          _ <- if (state.spansNeeded.exists(needed => queueSize >= needed)) signal.release else unit
-        } yield ()
-
-      for {
-        offered <- queue.tryOffer(span)
-        _ <- if (offered) notifyWorker else unit
-      } yield ()
+      Temporal[F].uncancelable { _ =>
+        queue.tryOffer(span).flatMap {
+          case true  => wakeup.tryOffer(()).void
+          case false => unit
+        }
+      }
     } else {
       unit
     }
   }
 
   def forceFlush: F[Unit] =
-    exportAll
+    mutex.lock.surround(exportAll)
 
   private def worker: F[Unit] =
     run.foreverM[Unit]
 
   private def run: F[Unit] =
-    Temporal[F].uncancelable { poll =>
-      // export the current batch and reset the state
-      def doExport(now: FiniteDuration, batch: Vector[SpanData]): F[Unit] =
-        poll(exportBatch(batch)).guarantee(
-          state.set(State(now + config.scheduleDelay, Vector.empty, None))
-        )
+    processBatch.flatMap {
+      case Some(waitTime) => waitForWakeup(waitTime)
+      case None           => unit
+    }
 
-      // wait either for:
-      // 1) the signal - it means the queue has enough spans
-      // 2) the timeout - it means we can export all remaining spans
-      def pollMore(now: FiniteDuration, nextExportTime: FiniteDuration, currentBatchSize: Int): F[Unit] = {
-        val pollWaitTime = nextExportTime - now
-        val spansNeeded = config.maxExportBatchSize - currentBatchSize
+  // dequeue, update the batch, and export under the same lock used by forceFlush
+  private def processBatch: F[Option[FiniteDuration]] =
+    mutex.lock.surround {
+      Temporal[F].uncancelable { poll =>
+        // export the current batch and reset the state
+        def doExport(now: FiniteDuration, batch: Vector[SpanData]): F[Unit] =
+          poll(exportBatch(batch)).guarantee(
+            state.set(State(now + config.scheduleDelay, Vector.empty))
+          )
 
-        val request =
-          for {
-            _ <- state.update(_.copy(spansNeeded = Some(spansNeeded)))
-            _ <- signal.await.timeoutTo(pollWaitTime, unit)
-          } yield ()
+        for {
+          st <- poll(state.get)
 
-        if (pollWaitTime > Duration.Zero) {
-          poll(request).guarantee(state.update(_.copy(spansNeeded = None)))
-        } else {
-          unit
-        }
+          // try to take enough spans to fill up the current batch
+          remaining = config.maxExportBatchSize - st.batch.size
+          spans <- if (remaining > 0) queue.tryTakeN(Some(remaining)) else List.empty[SpanData].pure[F]
+
+          // modify the state with the updated batch
+          nextState <- state.updateAndGet(_.copy(batch = st.batch ++ spans))
+
+          // the current timestamp
+          now <- Temporal[F].monotonic
+
+          result <- {
+            val batch = nextState.batch
+            val nextExportTime = nextState.nextExportTime
+
+            // two reasons to export:
+            // 1) the current batch size exceeds the limit
+            // 2) the worker is behind the scheduled export time
+            val canExport = batch.size >= config.maxExportBatchSize || now >= nextExportTime
+
+            if (canExport) doExport(now, batch).as(Option.empty[FiniteDuration])
+            else Some(nextExportTime - now).pure[F]
+          }
+        } yield result
       }
+    }
 
-      for {
-        st <- poll(state.get)
-
-        // try to take enough spans to fill up the current batch
-        spans <- queue.tryTakeN(Some(config.maxExportBatchSize - st.batch.size))
-
-        // modify the state with the updated batch
-        nextState <- state.updateAndGet(_.copy(batch = st.batch ++ spans))
-
-        // the current timestamp
-        now <- Temporal[F].monotonic
-
-        _ <- {
-          val batch = nextState.batch
-          val nextExportTime = nextState.nextExportTime
-
-          // two reasons to export:
-          // 1) the current batch size exceeds the limit
-          // 2) the worker is behind the scheduled export time
-          val canExport = batch.size >= config.maxExportBatchSize || now >= nextExportTime
-
-          if (canExport) doExport(now, batch)
-          else pollMore(now, nextExportTime, batch.size)
-        }
-      } yield ()
+  // wait either for:
+  // 1) a notification that spans are available
+  // 2) the timeout - it means we can export all remaining spans
+  private def waitForWakeup(waitTime: FiniteDuration): F[Unit] =
+    if (waitTime > Duration.Zero) {
+      wakeup.take.timeoutTo(waitTime, unit)
+    } else {
+      unit
     }
 
   // export all available data
@@ -161,7 +154,7 @@ private final class BatchSpanProcessor[F[_]: Temporal: Diagnostic] private (
       spanData <- queue.tryTakeN(None)
       all = st.batch ++ spanData
       _ <- all.grouped(config.maxExportBatchSize).toList.traverse_(exportBatch)
-      _ <- state.update(_.copy(batch = Vector.empty, spansNeeded = None))
+      _ <- state.update(_.copy(batch = Vector.empty))
     } yield ()
 
   private def exportBatch(batch: Vector[SpanData]): F[Unit] =
@@ -258,8 +251,7 @@ object BatchSpanProcessor {
 
   private final case class State(
       nextExportTime: FiniteDuration,
-      batch: Vector[SpanData],
-      spansNeeded: Option[Int]
+      batch: Vector[SpanData]
   )
 
   private final case class BuilderImpl[F[_]: Temporal: Diagnostic](
@@ -293,12 +285,14 @@ object BatchSpanProcessor {
       def create: F[BatchSpanProcessor[F]] =
         for {
           queue <- Queue.dropping[F, SpanData](maxQueueSize)
+          wakeup <- Queue.bounded[F, Unit](1)
+          mutex <- Mutex[F]
           now <- Temporal[F].monotonic
-          state <- Ref.of(State(now + config.scheduleDelay, Vector.empty, None))
-          signal <- CountDownLatch[F](1)
+          state <- Ref.of(State(now + config.scheduleDelay, Vector.empty))
         } yield new BatchSpanProcessor[F](
           queue = queue,
-          signal = signal,
+          wakeup = wakeup,
+          mutex = mutex,
           state = state,
           exporter = exporter,
           config = config
@@ -306,7 +300,7 @@ object BatchSpanProcessor {
 
       for {
         processor <- Resource.eval(create)
-        _ <- Resource.onFinalize(processor.exportAll)
+        _ <- Resource.onFinalize(processor.forceFlush)
         _ <- processor.worker.background
       } yield processor
     }

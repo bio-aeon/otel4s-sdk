@@ -17,14 +17,21 @@
 package org.typelevel.otel4s.sdk.logs.processor
 
 import cats.Foldable
+import cats.effect.Deferred
 import cats.effect.IO
+import cats.effect.Ref
+import cats.effect.std.Queue
+import cats.effect.testkit.TestControl
 import cats.syntax.all._
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
 import org.scalacheck.Test
 import org.scalacheck.effect.PropF
+import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.sdk.common.Diagnostic
+import org.typelevel.otel4s.sdk.common.InstrumentationScope
 import org.typelevel.otel4s.sdk.context.Context
+import org.typelevel.otel4s.sdk.data.LimitedData
 import org.typelevel.otel4s.sdk.logs.LogRecordRef
 import org.typelevel.otel4s.sdk.logs.data.LogRecordData
 import org.typelevel.otel4s.sdk.logs.exporter.InMemoryLogRecordExporter
@@ -83,10 +90,125 @@ class BatchLogRecordProcessorSuite extends CatsEffectSuite with ScalaCheckEffect
     }
   }
 
+  test("export consecutive full batches without waiting for the schedule delay") {
+    TestControl.executeEmbed {
+      for {
+        exportTimes <- Queue.unbounded[IO, FiniteDuration]
+        exporter = new TimingExporter(exportTimes)
+        elapsed <- BatchLogRecordProcessor
+          .builder(exporter)
+          .withScheduleDelay(1.hour)
+          .withMaxQueueSize(1)
+          .withMaxExportBatchSize(1)
+          .build
+          .use { processor =>
+            def exportBatch: IO[FiniteDuration] =
+              for {
+                // Give the worker time to enter its next waiting state.
+                _ <- IO.sleep(1.millis)
+                started <- IO.monotonic
+                ref <- LogRecordRef.create[IO](logRecord)
+                _ <- processor.onEmit(Context.root, ref)
+                exported <- exportTimes.take
+              } yield exported - started
+
+            for {
+              first <- exportBatch
+              second <- exportBatch
+            } yield (first, second)
+          }
+      } yield {
+        assertEquals(elapsed._1, Duration.Zero)
+        assertEquals(elapsed._2, Duration.Zero)
+      }
+    }
+  }
+
+  test("do not export concurrently when force flush overlaps the worker") {
+    TestControl.executeEmbed {
+      for {
+        firstExportStarted <- Deferred[IO, Unit]
+        releaseFirstExport <- Deferred[IO, Unit]
+        overlappingExport <- Deferred[IO, Unit]
+        exportCount <- Ref.of[IO, Int](0)
+        exporter = new CoordinatedExporter(
+          firstExportStarted,
+          releaseFirstExport,
+          overlappingExport,
+          exportCount
+        )
+        result <- BatchLogRecordProcessor
+          .builder(exporter)
+          .withScheduleDelay(1.hour)
+          .withMaxQueueSize(1)
+          .withMaxExportBatchSize(1)
+          .build
+          .use { processor =>
+            for {
+              ref <- LogRecordRef.create[IO](logRecord)
+              _ <- processor.onEmit(Context.root, ref)
+              _ <- firstExportStarted.get
+              flush <- processor.forceFlush.start
+              _ <- IO.sleep(1.second)
+              overlap <- overlappingExport.tryGet
+              _ <- releaseFirstExport.complete(())
+              _ <- flush.joinWithNever
+              count <- exportCount.get
+            } yield (overlap, count)
+          }
+      } yield {
+        assertEquals(result._1, None)
+        assertEquals(result._2, 1)
+      }
+    }
+  }
+
   override protected def scalaCheckTestParameters: Test.Parameters =
     super.scalaCheckTestParameters
       .withMinSuccessfulTests(10)
       .withMaxSize(10)
+
+  private val logRecord: LogRecordData =
+    LogRecordData(
+      timestamp = None,
+      observedTimestamp = Duration.Zero,
+      traceContext = None,
+      severity = None,
+      severityText = None,
+      body = None,
+      eventName = None,
+      attributes = LimitedData.attributes(0, 0),
+      instrumentationScope = InstrumentationScope.empty,
+      resource = TelemetryResource.empty
+    )
+
+  private class TimingExporter(exportTimes: Queue[IO, FiniteDuration]) extends LogRecordExporter.Unsealed[IO] {
+    val name: String = "timing"
+
+    def exportLogRecords[G[_]: Foldable](logs: G[LogRecordData]): IO[Unit] =
+      IO.monotonic.flatMap(exportTimes.offer)
+
+    def flush: IO[Unit] =
+      IO.unit
+  }
+
+  private class CoordinatedExporter(
+      firstExportStarted: Deferred[IO, Unit],
+      releaseFirstExport: Deferred[IO, Unit],
+      overlappingExport: Deferred[IO, Unit],
+      exportCount: Ref[IO, Int]
+  ) extends LogRecordExporter.Unsealed[IO] {
+    val name: String = "coordinated"
+
+    def exportLogRecords[G[_]: Foldable](logs: G[LogRecordData]): IO[Unit] =
+      exportCount.updateAndGet(_ + 1).flatMap {
+        case 1 => firstExportStarted.complete(()).void *> releaseFirstExport.get
+        case _ => overlappingExport.complete(()).void
+      }
+
+    def flush: IO[Unit] =
+      IO.unit
+  }
 
   private class FailingExporter(exporterName: String, onExport: Throwable) extends LogRecordExporter.Unsealed[IO] {
     def name: String = exporterName
