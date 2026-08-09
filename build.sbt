@@ -453,7 +453,16 @@ lazy val `sdk-exporter-logs` =
       Test / scalacOptions ++= {
         // see https://github.com/circe/circe/issues/2162
         if (tlIsScala3.value) Seq("-Xmax-inlines", "64") else Nil
-      }
+      },
+      mimaBinaryIssueFilters ++= Seq(
+        // BatchLogRecordProcessor.State is private
+        ProblemFilters.exclude[DirectMissingMethodProblem](
+          "org.typelevel.otel4s.sdk.logs.processor.BatchLogRecordProcessor#State.*"
+        ),
+        ProblemFilters.exclude[MissingTypesProblem](
+          "org.typelevel.otel4s.sdk.logs.processor.BatchLogRecordProcessor$State$"
+        )
+      )
     )
     .jsSettings(scalaJSLinkerSettings)
     .nativeEnablePlugins(ScalaNativeBrewedConfigPlugin)
@@ -530,7 +539,16 @@ lazy val `sdk-exporter-trace` =
       Test / scalacOptions ++= {
         // see https://github.com/circe/circe/issues/2162
         if (tlIsScala3.value) Seq("-Xmax-inlines", "64") else Nil
-      }
+      },
+      mimaBinaryIssueFilters ++= Seq(
+        // BatchSpanProcessor.State is private
+        ProblemFilters.exclude[DirectMissingMethodProblem](
+          "org.typelevel.otel4s.sdk.trace.processor.BatchSpanProcessor#State.*"
+        ),
+        ProblemFilters.exclude[MissingTypesProblem](
+          "org.typelevel.otel4s.sdk.trace.processor.BatchSpanProcessor$State$"
+        )
+      )
     )
     .jsSettings(scalaJSLinkerSettings)
     .nativeEnablePlugins(ScalaNativeBrewedConfigPlugin)
