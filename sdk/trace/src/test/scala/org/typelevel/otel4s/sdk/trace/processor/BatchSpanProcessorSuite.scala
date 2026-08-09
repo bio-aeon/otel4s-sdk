@@ -19,17 +19,29 @@ package processor
 
 import cats.Foldable
 import cats.effect.IO
+import cats.effect.std.Queue
+import cats.effect.testkit.TestControl
 import cats.syntax.foldable._
 import cats.syntax.traverse._
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
 import org.scalacheck.Test
 import org.scalacheck.effect.PropF
+import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.sdk.common.Diagnostic
+import org.typelevel.otel4s.sdk.common.InstrumentationScope
+import org.typelevel.otel4s.sdk.data.LimitedData
 import org.typelevel.otel4s.sdk.trace.data.SpanData
+import org.typelevel.otel4s.sdk.trace.data.StatusData
 import org.typelevel.otel4s.sdk.trace.exporter.InMemorySpanExporter
 import org.typelevel.otel4s.sdk.trace.exporter.SpanExporter
 import org.typelevel.otel4s.sdk.trace.scalacheck.Arbitraries._
+import org.typelevel.otel4s.trace.SpanContext
+import org.typelevel.otel4s.trace.SpanKind
+import org.typelevel.otel4s.trace.TraceFlags
+import org.typelevel.otel4s.trace.TraceState
+
+import scala.concurrent.duration._
 
 class BatchSpanProcessorSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
 
@@ -88,10 +100,99 @@ class BatchSpanProcessorSuite extends CatsEffectSuite with ScalaCheckEffectSuite
     }
   }
 
+  test("export a full batch without waiting for the schedule delay") {
+    TestControl.executeEmbed {
+      for {
+        exportTimes <- Queue.unbounded[IO, FiniteDuration]
+        exporter = new TimingExporter(exportTimes)
+        elapsed <- BatchSpanProcessor
+          .builder(exporter)
+          .withScheduleDelay(1.hour)
+          .withMaxQueueSize(1)
+          .withMaxExportBatchSize(1)
+          .build
+          .use { processor =>
+            for {
+              // Give the worker time to enter its waiting state.
+              _ <- IO.sleep(1.millis)
+              started <- IO.monotonic
+              _ <- processor.onEnd(sampledSpan)
+              exported <- exportTimes.take
+            } yield exported - started
+          }
+      } yield assertEquals(elapsed, Duration.Zero)
+    }
+  }
+
+  test("export consecutive full batches without waiting for the schedule delay") {
+    TestControl.executeEmbed {
+      for {
+        exportTimes <- Queue.unbounded[IO, FiniteDuration]
+        exporter = new TimingExporter(exportTimes)
+        elapsed <- BatchSpanProcessor
+          .builder(exporter)
+          .withScheduleDelay(1.hour)
+          .withMaxQueueSize(1)
+          .withMaxExportBatchSize(1)
+          .build
+          .use { processor =>
+            def exportBatch: IO[FiniteDuration] =
+              for {
+                // Give the worker time to enter its next waiting state.
+                _ <- IO.sleep(1.millis)
+                started <- IO.monotonic
+                _ <- processor.onEnd(sampledSpan)
+                exported <- exportTimes.take
+              } yield exported - started
+
+            for {
+              first <- exportBatch
+              second <- exportBatch
+            } yield (first, second)
+          }
+      } yield {
+        assertEquals(elapsed._1, Duration.Zero)
+        assertEquals(elapsed._2, Duration.Zero)
+      }
+    }
+  }
+
   override protected def scalaCheckTestParameters: Test.Parameters =
     super.scalaCheckTestParameters
       .withMinSuccessfulTests(10)
       .withMaxSize(10)
+
+  private val sampledSpan: SpanData =
+    SpanData(
+      name = "sampled",
+      spanContext = SpanContext(
+        traceId = SpanContext.TraceId.fromLongs(1L, 1L),
+        spanId = SpanContext.SpanId.fromLong(1L),
+        traceFlags = TraceFlags.Sampled,
+        traceState = TraceState.empty,
+        remote = false
+      ),
+      parentSpanContext = None,
+      kind = SpanKind.Internal,
+      startTimestamp = Duration.Zero,
+      endTimestamp = Some(Duration.Zero),
+      status = StatusData.Unset,
+      attributes = LimitedData.attributes(0, 0),
+      events = LimitedData.vector(0),
+      links = LimitedData.vector(0),
+      instrumentationScope = InstrumentationScope.empty,
+      resource = TelemetryResource.empty
+    )
+
+  private class TimingExporter(exportTimes: Queue[IO, FiniteDuration]) extends SpanExporter.Unsealed[IO] {
+    val name: String = "timing"
+
+    def exportSpans[G[_]: Foldable](spans: G[SpanData]): IO[Unit] =
+      IO.monotonic.flatMap(exportTimes.offer)
+
+    def flush: IO[Unit] =
+      IO.unit
+  }
 
   private class FailingExporter(
       exporterName: String,
