@@ -45,7 +45,13 @@ ThisBuild / crossScalaVersions := Seq(Scala213, "3.3.8")
 ThisBuild / scalaVersion := Scala213 // the default Scala
 
 ThisBuild / githubWorkflowOSes := Seq("ubuntu-24.04")
-ThisBuild / githubWorkflowBuildPreamble ++= nativeBrewInstallWorkflowSteps.value
+ThisBuild / githubWorkflowBuildPreamble ++= Seq(
+  WorkflowStep.Run(
+    commands = List("/home/linuxbrew/.linuxbrew/bin/brew update"),
+    name = Some("Update brew"),
+    cond = Some("startsWith(matrix.os, 'ubuntu')")
+  )
+) ++ nativeBrewInstallWorkflowSteps.value
 
 ThisBuild / mergifyStewardConfig := None
 ThisBuild / mergifyLabelPaths := Map(
